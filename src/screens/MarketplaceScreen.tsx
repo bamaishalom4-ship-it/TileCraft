@@ -35,8 +35,9 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { CoinBadge } from '../components/CoinBadge';
 import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
 import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
+import { NightSkylineStrip } from '../components/NightSkylineStrip';
 import { pickImageFromGallery } from '../services/imageService';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 const FLAG_OPTIONS: Array<{ reason: FlagReason; label: string }> = [
   { reason: 'nsfw', label: 'NSFW / Sexual Content' },
@@ -47,10 +48,9 @@ const FLAG_OPTIONS: Array<{ reason: FlagReason; label: string }> = [
 ];
 
 /**
- * TileCraft Community Marketplace Screen:
- * - Distinct states: loading, offline, backend-error, preview/unconfigured, genuinely empty, ready
- * - Never disguises a failed backend request as an empty community or invents fake listings
- * - Clear, honest Publish behavior (either opens Publish flow or explains exactly what is needed)
+ * TileCraft Community Marketplace Screen — Night Bus Stop palette with
+ * Collectible-Card cream stock visual treatment for existing puzzle cards.
+ * Preserves all loading, offline, backend-error, preview, and moderation states.
  */
 export const MarketplaceScreen: React.FC = () => {
   const isOnline = useOnlineStatus();
@@ -304,11 +304,11 @@ export const MarketplaceScreen: React.FC = () => {
           accessibilityLabel="Back to Home"
           style={styles.iconBtn}
         >
-          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={PALETTE.cream} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} accessibilityRole="header">
-            Marketplace
+            MARKETPLACE
           </Text>
           <Text style={styles.modeTag}>{statusBadgeText}</Text>
         </View>
@@ -317,6 +317,10 @@ export const MarketplaceScreen: React.FC = () => {
           loading={!economyHydrated}
           onPress={() => navigate('shop')}
         />
+      </View>
+
+      <View style={styles.stripPad}>
+        <NightSkylineStrip />
       </View>
 
       {/* Search + Publish Bar */}
@@ -357,8 +361,8 @@ export const MarketplaceScreen: React.FC = () => {
           >
             <Ionicons
               name={canPublish ? 'cloud-upload-outline' : 'information-circle-outline'}
-              size={18}
-              color={canPublish ? '#111827' : COLORS.textPrimary}
+              size={17}
+              color={canPublish ? PALETTE.ink : PALETTE.cream}
             />
           </View>
           <Text
@@ -367,7 +371,7 @@ export const MarketplaceScreen: React.FC = () => {
               !canPublish && styles.uploadBtnTextMuted,
             ]}
           >
-            Publish
+            PUBLISH
           </Text>
         </Pressable>
       </View>
@@ -399,7 +403,7 @@ export const MarketplaceScreen: React.FC = () => {
                         active && styles.catChipTextActive,
                       ]}
                     >
-                      {cat}
+                      {cat.toUpperCase()}
                     </Text>
                   </Pressable>
                 );
@@ -429,7 +433,7 @@ export const MarketplaceScreen: React.FC = () => {
                     sortBy === s.id && styles.sortPillTextActive,
                   ]}
                 >
-                  {s.label}
+                  {s.label.toUpperCase()}
                 </Text>
               </Pressable>
             ))}
@@ -440,14 +444,14 @@ export const MarketplaceScreen: React.FC = () => {
       {/* Distinct Loading / Offline / Error / Preview / Empty / Ready States */}
       {loading ? (
         <View style={styles.stateBox}>
-          <ActivityIndicator size="large" color={COLORS.gold} />
-          <Text style={styles.stateTitle}>Loading Marketplace...</Text>
+          <ActivityIndicator size="large" color={PALETTE.arcadeOrange} />
+          <Text style={styles.stateTitle}>LOADING MARKETPLACE...</Text>
           <Text style={styles.stateSub}>Checking the community puzzle catalog.</Text>
         </View>
       ) : feedStatus === 'offline' ? (
         <View style={styles.stateBox}>
-          <Ionicons name="cloud-offline-outline" size={44} color="#38BDF8" />
-          <Text style={styles.stateTitle}>You’re Offline</Text>
+          <Ionicons name="cloud-offline-outline" size={44} color={PALETTE.sunsetPeach} />
+          <Text style={styles.stateTitle}>YOU’RE OFFLINE</Text>
           <Text style={styles.stateSub}>
             {feedError ??
               'Community Marketplace needs an internet connection. Classic puzzles and your saved photo puzzles work offline right now.'}
@@ -459,7 +463,7 @@ export const MarketplaceScreen: React.FC = () => {
               accessibilityLabel="Return home to play offline puzzles"
               style={styles.statePrimaryBtn}
             >
-              <Text style={styles.statePrimaryText}>Play Offline Puzzles</Text>
+              <Text style={styles.statePrimaryText}>PLAY OFFLINE</Text>
             </Pressable>
             <Pressable
               onPress={() => loadFeed(true)}
@@ -467,7 +471,7 @@ export const MarketplaceScreen: React.FC = () => {
               accessibilityLabel="Retry loading Marketplace"
               style={styles.stateSecondaryBtn}
             >
-              <Text style={styles.stateSecondaryText}>Try Again</Text>
+              <Text style={styles.stateSecondaryText}>TRY AGAIN</Text>
             </Pressable>
           </View>
           <MadeByKuboFooter variant="compact" />
@@ -481,12 +485,12 @@ export const MarketplaceScreen: React.FC = () => {
                 : 'alert-circle-outline'
             }
             size={44}
-            color={COLORS.gold}
+            color={PALETTE.amberWindow}
           />
           <Text style={styles.stateTitle}>
             {feedStatus === 'unconfigured'
-              ? 'Marketplace Preview — Coming Soon'
-              : 'Marketplace Temporarily Unavailable'}
+              ? 'MARKETPLACE PREVIEW — COMING SOON'
+              : 'MARKETPLACE TEMPORARILY UNAVAILABLE'}
           </Text>
           <Text style={styles.stateSub}>{feedError}</Text>
           {publishDisabledReason ? (
@@ -501,7 +505,7 @@ export const MarketplaceScreen: React.FC = () => {
               accessibilityLabel="Retry connecting to Marketplace"
               style={styles.stateSecondaryBtn}
             >
-              <Text style={styles.stateSecondaryText}>Retry</Text>
+              <Text style={styles.stateSecondaryText}>RETRY</Text>
             </Pressable>
             <Pressable
               onPress={() => navigate('menu')}
@@ -509,7 +513,7 @@ export const MarketplaceScreen: React.FC = () => {
               accessibilityLabel="Back to Classic and Photo Puzzles"
               style={styles.statePrimaryBtn}
             >
-              <Text style={styles.statePrimaryText}>Play Local Puzzles</Text>
+              <Text style={styles.statePrimaryText}>PLAY LOCAL PUZZLES</Text>
             </Pressable>
           </View>
           <MadeByKuboFooter variant="compact" />
@@ -525,7 +529,7 @@ export const MarketplaceScreen: React.FC = () => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => loadFeed(true)}
-              tintColor={COLORS.gold}
+              tintColor={PALETTE.arcadeOrange}
             />
           }
           ListHeaderComponent={
@@ -534,7 +538,7 @@ export const MarketplaceScreen: React.FC = () => {
                 <Ionicons
                   name="information-circle-outline"
                   size={16}
-                  color={COLORS.gold}
+                  color={PALETTE.amberWindow}
                 />
                 <Text style={styles.publishNoticeText}>
                   {publishDisabledReason}
@@ -545,7 +549,7 @@ export const MarketplaceScreen: React.FC = () => {
           ListEmptyComponent={
             <View style={styles.stateBox}>
               <Ionicons name="images-outline" size={40} color={COLORS.textMuted} />
-              <Text style={styles.stateTitle}>No community puzzles yet</Text>
+              <Text style={styles.stateTitle}>NO COMMUNITY PUZZLES YET</Text>
               <Text style={styles.stateSub}>
                 {searchQuery.trim() || selectedCategory !== 'All'
                   ? 'No puzzles matched your current filter. Try clearing your search.'
@@ -566,6 +570,12 @@ export const MarketplaceScreen: React.FC = () => {
                 pressed && styles.cardPressed,
               ]}
             >
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {item.title.toUpperCase()}
+                </Text>
+              </View>
+
               <View style={styles.cardImageWrap}>
                 <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
                 <View style={styles.gridBadge}>
@@ -591,22 +601,17 @@ export const MarketplaceScreen: React.FC = () => {
                 </View>
               </View>
 
-              <View style={styles.cardBody}>
-                <Text style={styles.cardTitle} numberOfLines={1}>
-                  {item.title}
+              <View style={styles.cardMetaRow}>
+                <Text style={styles.cardAuthor} numberOfLines={1}>
+                  by {item.authorName}
                 </Text>
-                <View style={styles.cardMetaRow}>
-                  <Text style={styles.cardAuthor} numberOfLines={1}>
-                    by {item.authorName}
-                  </Text>
-                  <View style={styles.dlWrap}>
-                    <Ionicons
-                      name="download-outline"
-                      size={11}
-                      color={COLORS.textMuted}
-                    />
-                    <Text style={styles.dlText}>{item.downloadCount}</Text>
-                  </View>
+                <View style={styles.dlWrap}>
+                  <Ionicons
+                    name="download-outline"
+                    size={11}
+                    color="#4F4B45"
+                  />
+                  <Text style={styles.dlText}>{item.downloadCount}</Text>
                 </View>
               </View>
             </Pressable>
@@ -624,14 +629,18 @@ export const MarketplaceScreen: React.FC = () => {
         {inspectedPuzzle ? (
           <View style={styles.modalBackdrop} accessibilityViewIsModal>
             <View style={styles.detailCard}>
-              <Image
-                source={{ uri: inspectedPuzzle.imageUrl }}
-                style={styles.detailImage}
-              />
+              <View style={styles.detailImageFrame}>
+                <Image
+                  source={{ uri: inspectedPuzzle.imageUrl }}
+                  style={styles.detailImage}
+                />
+              </View>
 
               <View style={styles.detailHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.detailTitle}>{inspectedPuzzle.title}</Text>
+                  <Text style={styles.detailTitle}>
+                    {inspectedPuzzle.title.toUpperCase()}
+                  </Text>
                   <Text style={styles.detailAuthor}>
                     Crafted by {inspectedPuzzle.authorName} ·{' '}
                     {inspectedPuzzle.category}
@@ -643,7 +652,7 @@ export const MarketplaceScreen: React.FC = () => {
                   accessibilityRole="button"
                   accessibilityLabel="Report inappropriate content"
                 >
-                  <Ionicons name="flag-outline" size={18} color="#F87171" />
+                  <Ionicons name="flag-outline" size={18} color={PALETTE.brickRed} />
                 </Pressable>
               </View>
 
@@ -664,20 +673,20 @@ export const MarketplaceScreen: React.FC = () => {
                 style={styles.downloadCta}
               >
                 {downloading ? (
-                  <ActivityIndicator color="#111827" />
+                  <ActivityIndicator color={PALETTE.ink} />
                 ) : (
                   <>
                     <Ionicons
                       name={inspectedPuzzle.isOwned ? 'play' : 'download'}
                       size={18}
-                      color="#111827"
+                      color={PALETTE.ink}
                     />
                     <Text style={styles.downloadCtaText}>
                       {inspectedPuzzle.isOwned
-                        ? 'Play Puzzle'
+                        ? 'PLAY PUZZLE'
                         : inspectedPuzzle.coinPrice === 0
-                        ? 'Download Free & Play'
-                        : `Unlock & Play (${inspectedPuzzle.coinPrice} ¢)`}
+                        ? 'DOWNLOAD FREE & PLAY'
+                        : `UNLOCK & PLAY (${inspectedPuzzle.coinPrice} ¢)`}
                     </Text>
                   </>
                 )}
@@ -689,7 +698,7 @@ export const MarketplaceScreen: React.FC = () => {
                 accessibilityLabel="Close puzzle details"
                 style={styles.cancelLink}
               >
-                <Text style={styles.cancelLinkText}>Close</Text>
+                <Text style={styles.cancelLinkText}>CLOSE</Text>
               </Pressable>
             </View>
           </View>
@@ -705,7 +714,7 @@ export const MarketplaceScreen: React.FC = () => {
       >
         <View style={styles.modalBackdrop} accessibilityViewIsModal>
           <View style={styles.flagCard}>
-            <Text style={styles.flagTitle}>Report Puzzle</Text>
+            <Text style={styles.flagTitle}>REPORT PUZZLE</Text>
             <Text style={styles.flagSubtitle}>
               Flagged puzzles reaching 3 community reports are automatically hidden for moderator review.
             </Text>
@@ -727,7 +736,7 @@ export const MarketplaceScreen: React.FC = () => {
               accessibilityLabel="Cancel report"
               style={styles.cancelLink}
             >
-              <Text style={styles.cancelLinkText}>Cancel</Text>
+              <Text style={styles.cancelLinkText}>CANCEL</Text>
             </Pressable>
           </View>
         </View>
@@ -757,21 +766,26 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
+    backgroundColor: COLORS.nightBg,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  stripPad: {
+    paddingHorizontal: 14,
+    marginBottom: 10,
   },
   iconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.nightSurface,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -779,122 +793,127 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 21,
+    letterSpacing: 1,
   },
   modeTag: {
-    color: COLORS.textMuted,
+    color: PALETTE.amberWindow,
     fontSize: 10,
     fontWeight: '700',
     marginTop: 1,
   },
   searchRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 10,
+    paddingHorizontal: 14,
+    gap: 8,
     marginBottom: 10,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    paddingHorizontal: 11,
     height: 42,
     gap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: '#3B3452',
   },
   searchInput: {
     flex: 1,
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 13,
     fontWeight: '600',
   },
   uploadBtn: {
     height: 42,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.gold,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   uploadBtnMuted: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderColor: PALETTE.dustyMauve,
   },
   uploadBtnText: {
-    color: '#111827',
-    fontSize: 13,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   uploadBtnTextMuted: {
-    color: COLORS.textSecondary,
+    color: PALETTE.cream,
   },
   categoriesScroll: {
-    maxHeight: 40,
+    maxHeight: 38,
   },
   categoriesContent: {
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingHorizontal: 14,
+    gap: 7,
     alignItems: 'center',
   },
   catChip: {
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: COLORS.nightSurface,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   catChipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    borderColor: COLORS.gold,
+    backgroundColor: PALETTE.cream,
+    borderColor: PALETTE.ink,
   },
   catChipText: {
+    fontFamily: FONTS.pixel,
     color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    letterSpacing: 0.4,
   },
   catChipTextActive: {
-    color: COLORS.gold,
-    fontWeight: '800',
+    color: PALETTE.ink,
   },
   sortRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     gap: 8,
   },
   sortPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   sortPillActive: {
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 1.5,
+    borderColor: PALETTE.dustyMauve,
   },
   sortPillText: {
+    fontFamily: FONTS.pixel,
     color: COLORS.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
   },
   sortPillTextActive: {
-    color: COLORS.textPrimary,
+    color: PALETTE.amberWindow,
   },
   publishNoticeBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
     padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderWidth: 2,
+    borderColor: PALETTE.dustyMauve,
     marginBottom: 8,
   },
   publishNoticeText: {
@@ -907,14 +926,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 26,
-    paddingVertical: 40,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
     gap: 10,
   },
   stateTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 20,
+    letterSpacing: 0.8,
     textAlign: 'center',
   },
   stateSub: {
@@ -924,11 +944,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   infoNoteBox: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
     padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: '#3B3452',
     width: '100%',
   },
   infoNoteText: {
@@ -943,53 +963,77 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   statePrimaryBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.gold,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   statePrimaryText: {
-    color: '#111827',
-    fontSize: 13,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   stateSecondaryBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 8,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   stateSecondaryText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 28,
     gap: 12,
   },
   gridRow: {
     gap: 12,
   },
+
+  /* Collectible Cards Visual Treatment for Marketplace Grid Items */
   card: {
     flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardStock,
+    borderRadius: 8,
+    padding: 7,
+    gap: 6,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 5,
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],
     opacity: 0.92,
   },
+  cardHeader: {
+    borderBottomWidth: 1.5,
+    borderBottomColor: PALETTE.ink,
+    paddingBottom: 3,
+  },
+  cardTitle: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 15,
+    letterSpacing: 0.4,
+  },
   cardImageWrap: {
     width: '100%',
     aspectRatio: 1,
     position: 'relative',
+    borderRadius: 4,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    backgroundColor: PALETTE.ink,
   },
   cardImage: {
     width: '100%',
@@ -997,46 +1041,39 @@ const styles = StyleSheet.create({
   },
   gridBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(15, 19, 29, 0.78)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 7,
+    top: 6,
+    left: 6,
+    backgroundColor: PALETTE.ink,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   gridBadgeText: {
-    color: COLORS.textPrimary,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 12,
   },
   priceBadge: {
     position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: COLORS.gold,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    bottom: 6,
+    right: 6,
+    backgroundColor: PALETTE.arcadeOrange,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
   },
   ownedBadge: {
     backgroundColor: COLORS.success,
   },
   priceBadgeText: {
-    color: '#111827',
-    fontSize: 11,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 13,
   },
   ownedBadgeText: {
-    color: '#064E3B',
-  },
-  cardBody: {
-    padding: 10,
-    gap: 4,
-  },
-  cardTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
+    color: PALETTE.ink,
   },
   cardMetaRow: {
     flexDirection: 'row',
@@ -1046,8 +1083,9 @@ const styles = StyleSheet.create({
   },
   cardAuthor: {
     flex: 1,
-    color: COLORS.textSecondary,
+    color: '#4F4B45',
     fontSize: 11,
+    fontWeight: '700',
   },
   dlWrap: {
     flexDirection: 'row',
@@ -1055,13 +1093,15 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   dlText: {
-    color: COLORS.textMuted,
+    color: '#4F4B45',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
   },
+
+  /* Detail & Report Modals */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 12, 0.82)',
+    backgroundColor: 'rgba(14, 15, 22, 0.84)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -1069,17 +1109,22 @@ const styles = StyleSheet.create({
   detailCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
-    padding: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.cardStock,
+    borderRadius: 10,
+    padding: 15,
+    gap: 10,
+    borderWidth: 3,
+    borderColor: PALETTE.ink,
+  },
+  detailImageFrame: {
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
   },
   detailImage: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 14,
   },
   detailHeader: {
     flexDirection: 'row',
@@ -1087,75 +1132,86 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   detailTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 20,
+    letterSpacing: 0.6,
   },
   detailAuthor: {
-    color: COLORS.textSecondary,
+    color: '#4F4B45',
     fontSize: 12,
-    marginTop: 2,
+    fontWeight: '600',
+    marginTop: 1,
   },
   flagIconBtn: {
     width: 38,
     height: 38,
-    borderRadius: 10,
-    backgroundColor: 'rgba(248, 113, 113, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(248, 113, 113, 0.35)',
+    borderRadius: 7,
+    backgroundColor: '#F3DFD6',
+    borderWidth: 2,
+    borderColor: PALETTE.brickRed,
     alignItems: 'center',
     justifyContent: 'center',
   },
   detailStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: COLORS.cardStockMuted,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
   },
   detailStatText: {
-    color: COLORS.textSecondary,
+    color: PALETTE.ink,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   downloadCta: {
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: COLORS.gold,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   downloadCtaText: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 17,
+    letterSpacing: 0.6,
   },
   cancelLink: {
     alignItems: 'center',
     paddingVertical: 6,
   },
   cancelLinkText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.pixel,
+    color: '#5B5650',
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   flagCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 10,
     padding: 18,
     gap: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2.5,
+    borderColor: PALETTE.dustyMauve,
   },
   flagTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 20,
+    letterSpacing: 0.8,
   },
   flagSubtitle: {
     color: COLORS.textSecondary,
@@ -1167,16 +1223,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: COLORS.nightSurfacePurple,
     paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingVertical: 12,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   flagOptionText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
+    color: PALETTE.cream,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

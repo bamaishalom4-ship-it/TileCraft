@@ -18,8 +18,10 @@ import { CoinBadge } from '../components/CoinBadge';
 import { DailyRewardModal } from '../components/DailyRewardModal';
 import { InstallPwaBanner } from '../components/InstallPwaBanner';
 import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
+import { TileCraftWordmark } from '../components/TileCraftWordmark';
+import { CityArcadeBackdrop } from '../components/CityArcadeBackdrop';
 import { evaluateDailyStreak } from '../utils/economyUtils';
-import { COLORS, FRAME_THEMES } from '../theme/tokens';
+import { COLORS, FONTS, FRAME_THEMES, PALETTE } from '../theme/tokens';
 
 const GRID_OPTIONS: Array<{ size: GridSize; label: string; sub: string }> = [
   { size: 3, label: '3×3', sub: 'Quick' },
@@ -35,11 +37,12 @@ const THEME_IDS: FrameThemeId[] = [
 ];
 
 /**
- * TileCraft Home Screen:
- * - Player-facing copy & prominent primary play actions above the fold on mobile
- * - Resume active saved game with overwrite protection before starting a new game
- * - Quick 3x3 launch, Make a photo puzzle (private on device), & direct size/frame controls
- * - Daily login streak & install prompt placed cleanly below primary play actions
+ * TileCraft Home Screen — 16-bit City Arcade visual refresh:
+ * - Thin arcade cabinet border framing an original teal city street scene
+ * - Oversized stepped TILECRAFT wordmark and bold arcade orange START button
+ * - Easy-to-reach Photo Puzzle action and Resume banner when a save exists
+ * - Collectible-card cream stock treatment for saved local photo puzzles
+ * - All existing puzzle rules, pricing, storage, and accessibility intact
  */
 export const MainMenuScreen: React.FC = () => {
   const [picking, setPicking] = useState(false);
@@ -192,7 +195,7 @@ export const MainMenuScreen: React.FC = () => {
       showAppDialog({
         title: 'Retro Frame Pack Locked',
         message:
-          'Unlock Crimson, Sunburst, and Cobalt vintage trays in the Shop for 100 coins!',
+          'Unlock Brick Red, Sunset Peach, and Dusk Mauve trays in the Shop for 100 coins!',
         actions: [
           { label: 'Cancel', style: 'cancel' },
           {
@@ -253,7 +256,6 @@ export const MainMenuScreen: React.FC = () => {
     });
   };
 
-  const currentTheme = FRAME_THEMES[frameTheme];
   const savedThumbUri =
     savedActiveGame?.mode === 'photo'
       ? customPuzzles.find((p) => p.id === savedActiveGame.craftedPuzzleId)
@@ -266,32 +268,11 @@ export const MainMenuScreen: React.FC = () => {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* Top Bar: Brand + Coins */}
-      <View style={styles.topBar}>
-        <View style={styles.brandRow}>
-          <View
-            style={[
-              styles.miniLogoFrame,
-              { backgroundColor: currentTheme.frameOuter },
-            ]}
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
-          >
-            <View style={styles.miniLogoGrid}>
-              <View style={styles.miniTile} />
-              <View style={styles.miniTileGold} />
-              <View style={styles.miniTile} />
-              <View style={styles.miniBlank} />
-            </View>
-          </View>
-          <View style={styles.brandTextWrap}>
-            <Text style={styles.brandTitle} accessibilityRole="header">
-              TileCraft
-            </Text>
-            <Text style={styles.brandTagline}>
-              Turn any photo into a sliding puzzle.
-            </Text>
-          </View>
+      {/* Compact Arcade Status Bar */}
+      <View style={styles.topUtilityBar}>
+        <View style={styles.arcadeTag}>
+          <View style={styles.arcadeTagDot} />
+          <Text style={styles.arcadeTagText}>SLIDING PUZZLE ARCADE</Text>
         </View>
 
         <CoinBadge
@@ -301,7 +282,58 @@ export const MainMenuScreen: React.FC = () => {
         />
       </View>
 
-      {/* Resume Active Game Card (shown whenever a valid unfinished save exists) */}
+      {/* 16-Bit City Arcade Cabinet Hero */}
+      <View style={styles.cabinetOuter} testID="arcade-hero-cabinet">
+        <View style={styles.cabinetInner}>
+          {/* Pixel-Art City Street Scene */}
+          <View style={styles.sceneStage}>
+            <CityArcadeBackdrop />
+
+            {/* Subtle top decorative pixel trim */}
+            <View
+              style={styles.cabinetCornerRow}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <View style={styles.cornerPixel} />
+              <View style={styles.cornerLine} />
+              <View style={styles.cornerPixel} />
+            </View>
+
+            {/* Oversized Stepped Orange TILECRAFT Wordmark */}
+            <View style={styles.wordmarkContainer}>
+              <TileCraftWordmark maxWidth={388} />
+            </View>
+
+            {/* Spacer so the pixel skyline & lit storefront windows stay clearly visible */}
+            <View style={styles.sceneWindowSpacer} />
+          </View>
+
+          {/* Dark Arcade Marquee Bar with Large START Button */}
+          <View style={styles.cabinetFooter}>
+            <Pressable
+              testID="start-quick-puzzle-btn"
+              onPress={handlePlayQuick3x3}
+              accessibilityRole="button"
+              accessibilityLabel="Start a quick 3 by 3 puzzle"
+              style={({ pressed }) => [
+                styles.startButton,
+                pressed && styles.pressedScale,
+              ]}
+            >
+              <View style={styles.startButtonInset}>
+                <Text style={styles.startButtonLabel}>START</Text>
+                <View style={styles.startSubBadge}>
+                  <Text style={styles.startSubText}>QUICK 3×3</Text>
+                </View>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+
+      {/* Resume Active Game Banner (shown whenever a valid unfinished save exists) */}
       {savedActiveGame ? (
         <Pressable
           onPress={handleResumeSavedGame}
@@ -321,13 +353,13 @@ export const MainMenuScreen: React.FC = () => {
               importantForAccessibility="no-hide-descendants"
               accessibilityElementsHidden
             >
-              <Ionicons name="play-circle" size={26} color="#10B981" />
+              <Ionicons name="play" size={20} color={PALETTE.cream} />
             </View>
           )}
           <View style={styles.resumeTextWrap}>
             <Text style={styles.resumeEyebrow}>IN PROGRESS</Text>
             <Text style={styles.resumeTitle} numberOfLines={1}>
-              Resume puzzle · {savedActiveGame.puzzleTitle}
+              Resume · {savedActiveGame.puzzleTitle}
             </Text>
             <Text style={styles.resumeMeta}>
               {savedActiveGame.gridSize}×{savedActiveGame.gridSize} ·{' '}
@@ -337,73 +369,51 @@ export const MainMenuScreen: React.FC = () => {
           </View>
           <View style={styles.resumePill}>
             <Text style={styles.resumePillText}>
-              {resuming ? '...' : 'Resume'}
+              {resuming ? '...' : 'RESUME'}
             </Text>
           </View>
         </Pressable>
       ) : null}
 
-      {/* Primary Play Actions (Always above the fold at 375×667) */}
-      <View style={styles.primaryStack}>
-        <Pressable
-          onPress={handlePlayQuick3x3}
-          accessibilityRole="button"
-          accessibilityLabel="Play a quick 3 by 3 puzzle"
-          style={({ pressed }) => [
-            styles.primaryCta,
-            pressed && styles.pressedScale,
-          ]}
+      {/* Secondary Primary Action: Make a Photo Puzzle (Sunset Office accent) */}
+      <Pressable
+        testID="make-photo-puzzle-btn"
+        onPress={handleCreateCustomPuzzle}
+        disabled={picking}
+        accessibilityRole="button"
+        accessibilityLabel="Make a photo puzzle from your device"
+        style={({ pressed }) => [
+          styles.photoCta,
+          pressed && styles.pressedScale,
+        ]}
+      >
+        <View
+          style={styles.photoIconWrap}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
         >
-          <View
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
-          >
-            <Ionicons name="play" size={20} color="#111827" />
-          </View>
-          <View style={styles.ctaTextGroup}>
-            <Text style={styles.primaryCtaText}>Play a quick puzzle</Text>
-            <Text style={styles.primaryCtaSub}>Starts a 3×3 board right away</Text>
-          </View>
-        </Pressable>
-
-        <Pressable
-          onPress={handleCreateCustomPuzzle}
-          disabled={picking}
-          accessibilityRole="button"
-          accessibilityLabel="Make a photo puzzle from your device"
-          style={({ pressed }) => [
-            styles.photoCta,
-            pressed && styles.pressedScale,
-          ]}
+          <Ionicons name="images" size={20} color={PALETTE.ink} />
+        </View>
+        <View style={styles.photoTextWrap}>
+          <Text style={styles.photoTitle}>
+            {picking ? 'OPENING PHOTOS...' : 'MAKE A PHOTO PUZZLE'}
+          </Text>
+          <Text style={styles.photoSubtitle}>
+            Crop any photo into tiles. Stays private on your device.
+          </Text>
+        </View>
+        <View
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
         >
-          <View
-            style={styles.featureIconWrap}
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
-          >
-            <Ionicons name="images" size={22} color={COLORS.gold} />
-          </View>
-          <View style={styles.featureTextWrap}>
-            <Text style={styles.featureTitle}>
-              {picking ? 'Opening Photos...' : 'Make a photo puzzle'}
-            </Text>
-            <Text style={styles.featureSubtitle}>
-              Crop any photo into tiles. Stays private on your device.
-            </Text>
-          </View>
-          <View
-            importantForAccessibility="no-hide-descendants"
-            accessibilityElementsHidden
-          >
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-          </View>
-        </Pressable>
-      </View>
+          <Ionicons name="chevron-forward" size={18} color={PALETTE.sunsetPeach} />
+        </View>
+      </Pressable>
 
-      {/* Direct Board Size & Frame Controls (no extra menus needed) */}
-      <View style={styles.heroCard}>
+      {/* Board Size & Tray Frame Panel (Dusty Teal / Cream / Brick accents) */}
+      <View style={styles.controlPanel}>
         <View style={styles.boardHeaderRow}>
-          <Text style={styles.sectionEyebrow}>CHOOSE BOARD SIZE</Text>
+          <Text style={styles.sectionEyebrow}>BOARD SIZE</Text>
           <Pressable
             onPress={handlePlaySelectedClassic}
             accessibilityRole="button"
@@ -414,7 +424,7 @@ export const MainMenuScreen: React.FC = () => {
             ]}
           >
             <Text style={styles.playSizeLinkText}>
-              Play {gridSize}×{gridSize} →
+              PLAY {gridSize}×{gridSize} →
             </Text>
           </Pressable>
         </View>
@@ -456,8 +466,8 @@ export const MainMenuScreen: React.FC = () => {
                     >
                       <Ionicons
                         name="lock-closed"
-                        size={13}
-                        color={COLORS.gold}
+                        size={12}
+                        color={PALETTE.arcadeOrange}
                       />
                     </View>
                   )}
@@ -468,7 +478,7 @@ export const MainMenuScreen: React.FC = () => {
                     selected && styles.gridOptionSubActive,
                   ]}
                 >
-                  {unlocked ? opt.sub : '150 ¢'}
+                  {unlocked ? opt.sub.toUpperCase() : '150 ¢'}
                 </Text>
               </Pressable>
             );
@@ -476,7 +486,7 @@ export const MainMenuScreen: React.FC = () => {
         </View>
 
         <View style={styles.framePickerRow}>
-          <Text style={styles.framePickerLabel}>Tray Frame</Text>
+          <Text style={styles.framePickerLabel}>TRAY FRAME</Text>
           <View style={styles.frameSwatches} accessibilityRole="radiogroup">
             {THEME_IDS.map((id) => {
               const t = FRAME_THEMES[id];
@@ -504,7 +514,7 @@ export const MainMenuScreen: React.FC = () => {
                       importantForAccessibility="no-hide-descendants"
                       accessibilityElementsHidden
                     >
-                      <Ionicons name="lock-closed" size={11} color="#F8FAFC" />
+                      <Ionicons name="lock-closed" size={11} color={PALETTE.cream} />
                     </View>
                   )}
                 </Pressable>
@@ -517,12 +527,12 @@ export const MainMenuScreen: React.FC = () => {
       {/* Storage Warning (if browser IndexedDB failed) */}
       {storageWarning ? (
         <View style={styles.warningCard} accessibilityRole="alert">
-          <Ionicons name="warning-outline" size={16} color={COLORS.gold} />
+          <Ionicons name="warning-outline" size={16} color={PALETTE.arcadeOrange} />
           <Text style={styles.warningText}>{storageWarning}</Text>
         </View>
       ) : null}
 
-      {/* Saved Crafted Photo Puzzles (persisted in IndexedDB / device storage) */}
+      {/* Saved Crafted Photo Puzzles — Cream Card Stock Treatment */}
       {customPuzzles.length > 0 && (
         <View style={styles.librarySection}>
           <View style={styles.libraryHeader}>
@@ -550,21 +560,28 @@ export const MainMenuScreen: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel={`Play saved photo puzzle ${item.title}, ${item.preferredGridSize} by ${item.preferredGridSize}`}
                 style={({ pressed }) => [
-                  styles.customThumbCard,
+                  styles.customCardStock,
                   pressed && styles.pressedScale,
                 ]}
               >
-                <Image
-                  source={{ uri: item.imageUri }}
-                  style={styles.customThumbImg}
-                />
-                <View style={styles.customThumbMeta}>
-                  <Text style={styles.customThumbTitle} numberOfLines={1}>
-                    {item.title}
+                <View style={styles.customCardHeader}>
+                  <Text style={styles.customCardTitle} numberOfLines={1}>
+                    {item.title.toUpperCase()}
                   </Text>
-                  <Text style={styles.customThumbSize}>
-                    {item.preferredGridSize}×{item.preferredGridSize}
-                  </Text>
+                </View>
+                <View style={styles.customThumbFrame}>
+                  <Image
+                    source={{ uri: item.imageUri }}
+                    style={styles.customThumbImg}
+                  />
+                </View>
+                <View style={styles.customCardFooter}>
+                  <View style={styles.customSizePill}>
+                    <Text style={styles.customSizePillText}>
+                      {item.preferredGridSize}×{item.preferredGridSize}
+                    </Text>
+                  </View>
+                  <Text style={styles.customPlayTag}>PLAY</Text>
                 </View>
               </Pressable>
             ))}
@@ -572,7 +589,7 @@ export const MainMenuScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Secondary Destinations: Shop & Community Marketplace */}
+      {/* Secondary Destinations: Shop & Marketplace (Night Bus Stop palette) */}
       <View style={styles.dualRow}>
         <Pressable
           onPress={() => navigate('shop')}
@@ -584,12 +601,13 @@ export const MainMenuScreen: React.FC = () => {
           ]}
         >
           <View
+            style={[styles.halfIconBox, { backgroundColor: '#3A2E47' }]}
             importantForAccessibility="no-hide-descendants"
             accessibilityElementsHidden
           >
-            <Ionicons name="cart" size={20} color={COLORS.gold} />
+            <Ionicons name="cart" size={18} color={PALETTE.amberWindow} />
           </View>
-          <Text style={styles.halfCardTitle}>Coin Shop</Text>
+          <Text style={styles.halfCardTitle}>COIN SHOP</Text>
           <Text style={styles.halfCardSub}>Unlocks & daily coins</Text>
         </Pressable>
 
@@ -603,12 +621,13 @@ export const MainMenuScreen: React.FC = () => {
           ]}
         >
           <View
+            style={[styles.halfIconBox, { backgroundColor: '#243C4A' }]}
             importantForAccessibility="no-hide-descendants"
             accessibilityElementsHidden
           >
-            <Ionicons name="globe-outline" size={20} color="#38BDF8" />
+            <Ionicons name="globe-outline" size={18} color={PALETTE.sunsetPeach} />
           </View>
-          <Text style={styles.halfCardTitle}>Marketplace</Text>
+          <Text style={styles.halfCardTitle}>MARKETPLACE</Text>
           <Text style={styles.halfCardSub}>Community puzzles</Text>
         </Pressable>
       </View>
@@ -629,11 +648,11 @@ export const MainMenuScreen: React.FC = () => {
               importantForAccessibility="no-hide-descendants"
               accessibilityElementsHidden
             >
-              <Ionicons name="flame" size={20} color={COLORS.gold} />
+              <Ionicons name="flame" size={20} color={PALETTE.arcadeOrange} />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.dailyBannerTitle}>
-                Day {streakStatus.nextClaimDay} Daily Reward Ready
+                DAY {streakStatus.nextClaimDay} DAILY REWARD READY
               </Text>
               <Text style={styles.dailyBannerSub}>
                 Claim +{streakStatus.nextRewardCoins} free coins
@@ -662,9 +681,10 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
     width: '100%',
+    backgroundColor: COLORS.nightBg,
   },
   container: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 28,
     gap: 12,
@@ -672,86 +692,168 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  topBar: {
+  topUtilityBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
+    gap: 8,
   },
-  brandRow: {
-    flex: 1,
+  arcadeTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 6,
+    backgroundColor: COLORS.nightSurface,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
-  brandTextWrap: {
-    flex: 1,
+  arcadeTagDot: {
+    width: 7,
+    height: 7,
+    backgroundColor: PALETTE.arcadeOrange,
   },
-  miniLogoFrame: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    padding: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(245, 158, 11, 0.5)',
+  arcadeTagText: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
-  miniLogoGrid: {
-    flex: 1,
+
+  /* Thin Arcade Cabinet Border framing the Pixel City Hero */
+  cabinetOuter: {
+    backgroundColor: PALETTE.brickRed,
+    padding: 3,
+    borderRadius: 10,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  cabinetInner: {
+    backgroundColor: PALETTE.ink,
+    borderRadius: 7,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+  },
+  sceneStage: {
+    position: 'relative',
+    width: '100%',
+    minHeight: 204,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
+    justifyContent: 'space-between',
+    backgroundColor: PALETTE.cityTealDark,
+  },
+  cabinetCornerRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
-  miniTile: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-    backgroundColor: COLORS.tileFace,
+  cornerPixel: {
+    width: 6,
+    height: 6,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 1,
+    borderColor: PALETTE.ink,
   },
-  miniTileGold: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-    backgroundColor: COLORS.gold,
+  cornerLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: 'rgba(183, 74, 60, 0.75)',
   },
-  miniBlank: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  wordmarkContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 2,
   },
-  brandTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.5,
+  sceneWindowSpacer: {
+    height: 112,
   },
-  brandTagline: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
+  cabinetFooter: {
+    backgroundColor: PALETTE.ink,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 2,
+    borderTopColor: PALETTE.brickRed,
   },
+  startButton: {
+    backgroundColor: PALETTE.arcadeOrange,
+    borderRadius: 8,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 5,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
+    padding: 3,
+  },
+  startButtonInset: {
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: PALETTE.cream,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  startButtonLabel: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 28,
+    lineHeight: 28,
+    letterSpacing: 3,
+    textShadowColor: PALETTE.ink,
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 0,
+  },
+  startSubBadge: {
+    backgroundColor: PALETTE.ink,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: PALETTE.cream,
+  },
+  startSubText: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 13,
+    letterSpacing: 0.8,
+  },
+
+  /* Resume Active Game Card */
   resumeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderRadius: 16,
-    padding: 12,
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(16, 185, 129, 0.55)',
+    backgroundColor: '#1E3C42',
+    borderRadius: 8,
+    padding: 10,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: PALETTE.cityTeal,
   },
   resumeThumb: {
-    width: 46,
-    height: 46,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.success,
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: PALETTE.cream,
   },
   resumeIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: PALETTE.cityTeal,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -760,13 +862,13 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   resumeEyebrow: {
-    color: '#6EE7B7',
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 12,
+    letterSpacing: 0.8,
   },
   resumeTitle: {
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -776,82 +878,71 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   resumePill: {
-    backgroundColor: COLORS.success,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    backgroundColor: PALETTE.cream,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   resumePillText: {
-    color: '#064E3B',
-    fontSize: 12,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
-  primaryStack: {
-    gap: 10,
-  },
-  primaryCta: {
-    minHeight: 58,
-    borderRadius: 16,
-    backgroundColor: COLORS.gold,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  ctaTextGroup: {
-    alignItems: 'flex-start',
-  },
-  primaryCtaText: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  primaryCtaSub: {
-    color: '#451A03',
-    fontSize: 11,
-    fontWeight: '700',
-  },
+
+  /* Make a Photo Puzzle CTA (Sunset Office palette) */
   photoCta: {
+    backgroundColor: COLORS.photoSurface,
+    borderRadius: 8,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 13,
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(245, 158, 11, 0.42)',
+    gap: 11,
+    borderWidth: 2,
+    borderColor: PALETTE.dustyMauve,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
-  featureIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+  photoIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: PALETTE.sunsetPeach,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureTextWrap: {
+  photoTextWrap: {
     flex: 1,
     gap: 2,
   },
-  featureTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
+  photoTitle: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 16,
+    letterSpacing: 0.6,
   },
-  featureSubtitle: {
-    color: COLORS.textSecondary,
+  photoSubtitle: {
+    color: '#D8CDD9',
     fontSize: 12,
+    fontWeight: '500',
     lineHeight: 16,
   },
-  heroCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    padding: 14,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+
+  /* Board Size & Tray Frame Panel */
+  controlPanel: {
+    backgroundColor: COLORS.classicSurface,
+    borderRadius: 8,
+    padding: 12,
+    gap: 10,
+    borderWidth: 2,
+    borderColor: PALETTE.cityTeal,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   boardHeaderRow: {
     flexDirection: 'row',
@@ -859,23 +950,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionEyebrow: {
-    color: COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 15,
     letterSpacing: 1,
   },
   playSizeLink: {
+    backgroundColor: PALETTE.brickRed,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   playSizeLinkText: {
-    color: COLORS.gold,
-    fontSize: 12,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
   gridRow: {
     flexDirection: 'row',
@@ -883,20 +975,20 @@ const styles = StyleSheet.create({
   },
   gridOption: {
     flex: 1,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    backgroundColor: '#1A343B',
+    borderRadius: 6,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   gridOptionActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderColor: COLORS.gold,
+    backgroundColor: PALETTE.cream,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 4,
   },
   gridOptionLocked: {
-    opacity: 0.8,
+    opacity: 0.78,
   },
   gridOptionHeader: {
     flexDirection: 'row',
@@ -904,64 +996,72 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   gridOptionTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 19,
   },
   gridOptionTitleActive: {
-    color: COLORS.gold,
+    color: PALETTE.ink,
   },
   gridOptionSub: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 1,
+    fontFamily: FONTS.pixel,
+    color: '#A5C1C6',
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
   gridOptionSubActive: {
-    color: '#FDE68A',
+    color: PALETTE.brickRed,
   },
   framePickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingTop: 2,
   },
   framePickerLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.dustyCream,
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
   frameSwatches: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 9,
   },
   frameSwatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   frameSwatchSelected: {
-    borderColor: COLORS.textPrimary,
-    transform: [{ scale: 1.12 }],
+    borderWidth: 2.5,
+    borderColor: PALETTE.arcadeOrange,
+    transform: [{ scale: 1.08 }],
   },
+
+  /* Storage Warning */
   warningCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderRadius: 12,
+    backgroundColor: '#3A2322',
+    borderRadius: 8,
     padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderWidth: 2,
+    borderColor: PALETTE.brickRed,
   },
   warningText: {
     flex: 1,
-    color: '#FDE68A',
+    color: PALETTE.cream,
     fontSize: 12,
+    lineHeight: 16,
   },
+
+  /* Collectible Cards Visual Treatment for Saved Crafted Puzzles */
   librarySection: {
     gap: 8,
   },
@@ -971,102 +1071,153 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   libraryCount: {
-    color: COLORS.textMuted,
-    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontSize: 12,
     fontWeight: '600',
   },
   libraryList: {
     gap: 10,
+    paddingRight: 8,
+    paddingBottom: 4,
   },
-  customThumbCard: {
-    width: 118,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
+  customCardStock: {
+    width: 128,
+    backgroundColor: COLORS.cardStock,
+    borderRadius: 8,
+    padding: 6,
+    gap: 5,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 5,
+  },
+  customCardHeader: {
+    borderBottomWidth: 1.5,
+    borderBottomColor: PALETTE.ink,
+    paddingBottom: 3,
+  },
+  customCardTitle: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 14,
+    letterSpacing: 0.4,
+  },
+  customThumbFrame: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 4,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    backgroundColor: PALETTE.ink,
   },
   customThumbImg: {
-    width: 118,
-    height: 118,
+    width: '100%',
+    height: '100%',
   },
-  customThumbMeta: {
-    padding: 8,
+  customCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 4,
+    paddingTop: 1,
   },
-  customThumbTitle: {
-    flex: 1,
-    color: COLORS.textPrimary,
+  customSizePill: {
+    backgroundColor: PALETTE.ink,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  customSizePillText: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
     fontSize: 12,
-    fontWeight: '700',
   },
-  customThumbSize: {
-    color: COLORS.gold,
-    fontSize: 11,
-    fontWeight: '800',
+  customPlayTag: {
+    fontFamily: FONTS.pixel,
+    color: PALETTE.brickRed,
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
+
+  /* Secondary Destinations (Night Bus Stop palette) */
   dualRow: {
     flexDirection: 'row',
     gap: 10,
   },
   halfCard: {
     flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    padding: 12,
     gap: 4,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: '#3A3452',
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
+  },
+  halfIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   halfCardTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
-    marginTop: 2,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 16,
+    letterSpacing: 0.6,
   },
   halfCardSub: {
     color: COLORS.textSecondary,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
   },
+
+  /* Daily Reward Banner */
   dailyBanner: {
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderRadius: 8,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.45)',
+    gap: 10,
+    borderWidth: 2,
+    borderColor: PALETTE.arcadeOrange,
   },
   dailyBannerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
   dailyBannerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 15,
+    letterSpacing: 0.5,
   },
   dailyBannerSub: {
-    color: '#FDE68A',
-    fontSize: 11,
+    color: PALETTE.sunsetPeach,
+    fontSize: 12,
     fontWeight: '600',
   },
   claimPill: {
-    backgroundColor: COLORS.gold,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9,
+    backgroundColor: PALETTE.arcadeOrange,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   claimPillText: {
-    color: '#111827',
-    fontSize: 11,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
   pressedScale: {
     transform: [{ scale: 0.98 }],

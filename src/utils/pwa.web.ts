@@ -65,7 +65,7 @@ function injectAccessibleFocusStyles(): void {
       button:focus-visible,
       a:focus-visible,
       input:focus-visible {
-        outline: 2.5px solid #F59E0B !important;
+        outline: 2.5px solid #FF8A16 !important;
         outline-offset: 2px !important;
       }
     `;
@@ -94,7 +94,7 @@ export function registerPwa(): void {
   ensureHeadTag('meta[name="theme-color"]', () => {
     const meta = document.createElement('meta');
     meta.name = 'theme-color';
-    meta.content = '#0F131D';
+    meta.content = '#161820';
     return meta;
   });
 

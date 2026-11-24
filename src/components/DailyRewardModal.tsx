@@ -15,7 +15,7 @@ import {
 } from '../utils/economyUtils';
 import { useAppStore } from '../store/useAppStore';
 import { showAppDialog } from '../store/useDialogStore';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 interface DailyRewardModalProps {
   visible: boolean;
@@ -94,9 +94,9 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-                <Ionicons name="flame" size={22} color={COLORS.gold} />
+                <Ionicons name="flame" size={20} color={PALETTE.arcadeOrange} />
               </View>
-              <Text style={styles.title}>Daily Login Streak</Text>
+              <Text style={styles.title}>DAILY LOGIN STREAK</Text>
             </View>
             <Pressable
               onPress={onClose}
@@ -104,7 +104,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
               accessibilityLabel="Close daily rewards"
               style={styles.closeBtn}
             >
-              <Ionicons name="close" size={18} color={COLORS.textPrimary} />
+              <Ionicons name="close" size={18} color={PALETTE.cream} />
             </Pressable>
           </View>
 
@@ -129,7 +129,14 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
                     isTodayTarget && styles.dayBoxActive,
                   ]}
                 >
-                  <Text style={styles.dayLabel}>DAY {dayNum}</Text>
+                  <Text
+                    style={[
+                      styles.dayLabel,
+                      isTodayTarget && styles.dayLabelActive,
+                    ]}
+                  >
+                    DAY {dayNum}
+                  </Text>
                   <Text
                     style={[
                       styles.dayCoins,
@@ -169,7 +176,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
             ]}
           >
             {claiming ? (
-              <ActivityIndicator color="#111827" />
+              <ActivityIndicator color={PALETTE.ink} />
             ) : (
               <Text
                 style={[
@@ -178,8 +185,8 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
                 ]}
               >
                 {status.canClaimToday
-                  ? `Claim Day ${status.nextClaimDay} (+${status.nextRewardCoins} ¢)`
-                  : 'Claimed Today — See You Tomorrow!'}
+                  ? `CLAIM DAY ${status.nextClaimDay} (+${status.nextRewardCoins} ¢)`
+                  : 'CLAIMED TODAY — SEE YOU TOMORROW'}
               </Text>
             )}
           </Pressable>
@@ -192,7 +199,7 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 12, 0.82)',
+    backgroundColor: 'rgba(14, 15, 22, 0.84)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -200,12 +207,14 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 10,
     padding: 18,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    gap: 12,
+    borderWidth: 2.5,
+    borderColor: PALETTE.dustyMauve,
+    borderBottomWidth: 5,
+    borderBottomColor: PALETTE.ink,
   },
   header: {
     flexDirection: 'row',
@@ -218,15 +227,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 20,
+    letterSpacing: 0.6,
   },
   closeBtn: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: 7,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -242,14 +254,14 @@ const styles = StyleSheet.create({
   },
   dayBox: {
     width: '31%',
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
-    paddingVertical: 10,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderRadius: 7,
+    paddingVertical: 9,
     paddingHorizontal: 6,
     alignItems: 'center',
     gap: 3,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   dayBoxWide: {
     width: '100%',
@@ -258,48 +270,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   dayBoxDone: {
-    borderColor: 'rgba(16, 185, 129, 0.5)',
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: COLORS.success,
+    backgroundColor: '#1B3635',
   },
   dayBoxActive: {
-    borderColor: COLORS.gold,
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderColor: PALETTE.arcadeOrange,
+    backgroundColor: PALETTE.cream,
   },
   dayLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 12,
+  },
+  dayLabelActive: {
+    color: PALETTE.brickRed,
   },
   dayCoins: {
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 14,
     fontWeight: '900',
   },
   dayCoinsActive: {
-    color: COLORS.gold,
+    color: PALETTE.ink,
   },
   todayTag: {
-    color: COLORS.gold,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.8,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.arcadeOrangeDeep,
+    fontSize: 11,
+    letterSpacing: 0.6,
   },
   claimBtn: {
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: COLORS.gold,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
   claimBtnDisabled: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderBottomColor: PALETTE.ink,
   },
   claimBtnText: {
-    color: '#111827',
-    fontSize: 14,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 16,
+    letterSpacing: 0.6,
   },
   claimBtnTextDisabled: {
     color: COLORS.textSecondary,

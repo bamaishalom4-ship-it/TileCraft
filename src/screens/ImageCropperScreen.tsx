@@ -21,7 +21,7 @@ import {
   computeSquareCropRegion,
 } from '../utils/imageCropUtils';
 import { cropAndNormalizeSquareImage } from '../services/imageService';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 const ZOOM_MIN = 1.0;
 const ZOOM_MAX = 3.0;
@@ -29,13 +29,13 @@ const ZOOM_STEP = 0.25;
 
 /**
  * Interactive 1:1 Square Image Cropper & Grid Cut-Line Previewer:
- * - Sized responsively for 320×568, 375×667, and desktop so "Crop & Play" is always reachable
- * - Persists cropped photo durably in IndexedDB (web) / DocumentDirectory (native)
- * - Clearly informs the player that their photo stays private on this device
+ * - Styled in the Sunset Office palette (sunset peach, dusty blue, muted mauve)
+ * - Player's photo stays 100% unfiltered and unpixelated
+ * - Sized responsively for 375×667 and desktop so "Crop & Play" is always reachable
+ * - All cropping, rotation, zoom, and durable storage functionality unchanged
  */
 export const ImageCropperScreen: React.FC = () => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  // Fit comfortably alongside controls even on 375×667 and 320×568 viewports
   const viewportSize = Math.max(
     180,
     Math.min(screenWidth - 44, Math.floor(screenHeight * 0.36), 300)
@@ -202,16 +202,16 @@ export const ImageCropperScreen: React.FC = () => {
           accessibilityLabel="Cancel photo cropper"
           style={styles.iconBtn}
         >
-          <Ionicons name="close" size={20} color={COLORS.textPrimary} />
+          <Ionicons name="close" size={20} color={PALETTE.cream} />
         </Pressable>
-        <Text style={styles.headerTitle}>Crop Photo Puzzle</Text>
+        <Text style={styles.headerTitle}>CROP PHOTO PUZZLE</Text>
         <Pressable
           onPress={handleResetCrop}
           accessibilityRole="button"
           accessibilityLabel="Reset crop position and zoom"
           style={styles.resetPill}
         >
-          <Text style={styles.resetText}>Reset</Text>
+          <Text style={styles.resetText}>RESET</Text>
         </Pressable>
       </View>
 
@@ -220,62 +220,64 @@ export const ImageCropperScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Interactive Square Viewport with Live Tile Grid Overlay */}
-        <View
-          style={[
-            styles.cropViewport,
-            { width: viewportSize, height: viewportSize },
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <Image
-            source={{ uri: asset.uri }}
-            resizeMode="cover"
-            style={{
-              width: layout.renderedWidth,
-              height: layout.renderedHeight,
-              transform: [
-                { translateX: layout.offsetX },
-                { translateY: layout.offsetY },
-                { rotate: `${rotation}deg` },
-              ],
-            }}
-          />
+        {/* Sunset-framed Square Viewport — photo inside is 100% unfiltered & unpixelated */}
+        <View style={styles.cropFrameOuter}>
+          <View
+            style={[
+              styles.cropViewport,
+              { width: viewportSize, height: viewportSize },
+            ]}
+            {...panResponder.panHandlers}
+          >
+            <Image
+              source={{ uri: asset.uri }}
+              resizeMode="cover"
+              style={{
+                width: layout.renderedWidth,
+                height: layout.renderedHeight,
+                transform: [
+                  { translateX: layout.offsetX },
+                  { translateY: layout.offsetY },
+                  { rotate: `${rotation}deg` },
+                ],
+              }}
+            />
 
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {gridLines.map((line) => (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              {gridLines.map((line) => (
+                <View
+                  key={`v-${line}`}
+                  style={[
+                    styles.verticalLine,
+                    { left: `${(line / selectedGrid) * 100}%` },
+                  ]}
+                />
+              ))}
+              {gridLines.map((line) => (
+                <View
+                  key={`h-${line}`}
+                  style={[
+                    styles.horizontalLine,
+                    { top: `${(line / selectedGrid) * 100}%` },
+                  ]}
+                />
+              ))}
               <View
-                key={`v-${line}`}
                 style={[
-                  styles.verticalLine,
-                  { left: `${(line / selectedGrid) * 100}%` },
+                  styles.blankPreview,
+                  {
+                    width: `${100 / selectedGrid}%`,
+                    height: `${100 / selectedGrid}%`,
+                  },
                 ]}
-              />
-            ))}
-            {gridLines.map((line) => (
-              <View
-                key={`h-${line}`}
-                style={[
-                  styles.horizontalLine,
-                  { top: `${(line / selectedGrid) * 100}%` },
-                ]}
-              />
-            ))}
-            <View
-              style={[
-                styles.blankPreview,
-                {
-                  width: `${100 / selectedGrid}%`,
-                  height: `${100 / selectedGrid}%`,
-                },
-              ]}
-            >
-              <Text style={styles.blankPreviewText}>GAP</Text>
+              >
+                <Text style={styles.blankPreviewText}>GAP</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Zoom & Rotate Controls */}
+        {/* Zoom & Rotate Controls (Dusty Blue + Sunset Peach accents) */}
         <View style={styles.toolsRow}>
           <Pressable
             onPress={() => adjustZoom(-ZOOM_STEP)}
@@ -285,7 +287,7 @@ export const ImageCropperScreen: React.FC = () => {
             accessibilityState={{ disabled: zoom <= ZOOM_MIN }}
             style={[styles.toolBtn, zoom <= ZOOM_MIN && styles.toolDisabled]}
           >
-            <Ionicons name="remove" size={18} color={COLORS.textPrimary} />
+            <Ionicons name="remove" size={18} color={PALETTE.cream} />
           </Pressable>
 
           <View style={styles.zoomReadout}>
@@ -300,7 +302,7 @@ export const ImageCropperScreen: React.FC = () => {
             accessibilityState={{ disabled: zoom >= ZOOM_MAX }}
             style={[styles.toolBtn, zoom >= ZOOM_MAX && styles.toolDisabled]}
           >
-            <Ionicons name="add" size={18} color={COLORS.textPrimary} />
+            <Ionicons name="add" size={18} color={PALETTE.cream} />
           </Pressable>
 
           <Pressable
@@ -316,10 +318,10 @@ export const ImageCropperScreen: React.FC = () => {
               <Ionicons
                 name="refresh-outline"
                 size={16}
-                color={COLORS.textPrimary}
+                color={PALETTE.sunsetPeach}
               />
             </View>
-            <Text style={styles.rotateText}>Rotate</Text>
+            <Text style={styles.rotateText}>ROTATE</Text>
           </Pressable>
         </View>
 
@@ -330,7 +332,7 @@ export const ImageCropperScreen: React.FC = () => {
             value={title}
             onChangeText={setTitle}
             placeholder="Name your puzzle..."
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor="#A999B0"
             accessibilityLabel="Custom puzzle title"
             maxLength={32}
             style={styles.input}
@@ -391,12 +393,13 @@ export const ImageCropperScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* Sticky Bottom CTA + Privacy Notice (always easy to reach on small phones) */}
+      {/* Sticky Bottom CTA + Privacy Notice (always easy to reach on 375×667) */}
       <View style={styles.footerBar}>
         <Text style={styles.privacyNote}>
           Stays private on your device unless you choose to publish it later.
         </Text>
         <Pressable
+          testID="crop-and-play-btn"
           onPress={handleConfirmCrop}
           disabled={processing}
           accessibilityRole="button"
@@ -407,16 +410,16 @@ export const ImageCropperScreen: React.FC = () => {
           ]}
         >
           {processing ? (
-            <ActivityIndicator color="#111827" />
+            <ActivityIndicator color={PALETTE.ink} />
           ) : (
             <>
               <View
                 importantForAccessibility="no-hide-descendants"
                 accessibilityElementsHidden
               >
-                <Ionicons name="crop" size={18} color="#111827" />
+                <Ionicons name="crop" size={18} color={PALETTE.ink} />
               </View>
-              <Text style={styles.confirmBtnText}>Crop & Play</Text>
+              <Text style={styles.confirmBtnText}>CROP & PLAY</Text>
             </>
           )}
         </Pressable>
@@ -431,59 +434,69 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 460,
     alignSelf: 'center',
+    backgroundColor: COLORS.photoBg,
   },
   topBar: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 8,
   },
   iconBtn: {
     width: 38,
     height: 38,
-    borderRadius: 11,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.photoSurfaceAlt,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 19,
+    letterSpacing: 0.8,
   },
   resetPill: {
     paddingHorizontal: 11,
     paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.photoSurfaceAlt,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   resetText: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 12,
     alignItems: 'center',
     gap: 10,
   },
-  cropViewport: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#090B10',
+  cropFrameOuter: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: PALETTE.dustyBlue,
     borderWidth: 2.5,
-    borderColor: COLORS.gold,
+    borderColor: PALETTE.ink,
+  },
+  cropViewport: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: PALETTE.ink,
+    borderWidth: 2.5,
+    borderColor: PALETTE.sunsetPeach,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -492,27 +505,27 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: 'rgba(255, 240, 208, 0.72)',
   },
   horizontalLine: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: 'rgba(255, 240, 208, 0.72)',
   },
   blankPreview: {
     position: 'absolute',
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 19, 29, 0.65)',
+    backgroundColor: 'rgba(22, 24, 32, 0.68)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   blankPreviewText: {
-    color: COLORS.gold,
-    fontSize: 10,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 13,
     letterSpacing: 1,
   },
   toolsRow: {
@@ -524,25 +537,25 @@ const styles = StyleSheet.create({
   toolBtn: {
     width: 40,
     height: 40,
-    borderRadius: 11,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.photoSurfaceAlt,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomReadout: {
     paddingHorizontal: 10,
     height: 40,
-    borderRadius: 11,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.photoSurface,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   zoomText: {
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 12,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
@@ -550,48 +563,51 @@ const styles = StyleSheet.create({
   rotateBtn: {
     flex: 1,
     height: 40,
-    borderRadius: 11,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.photoSurfaceAlt,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   rotateText: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   toolDisabled: {
     opacity: 0.45,
   },
   formCard: {
     width: '100%',
-    backgroundColor: COLORS.surface,
-    borderRadius: 15,
+    backgroundColor: COLORS.photoSurface,
+    borderRadius: 8,
     padding: 12,
     gap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: PALETTE.dustyMauve,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   fieldLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 14,
+    letterSpacing: 0.8,
   },
   input: {
     height: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 6,
+    backgroundColor: '#292132',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     paddingHorizontal: 12,
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   gridRow: {
     flexDirection: 'row',
@@ -599,54 +615,59 @@ const styles = StyleSheet.create({
   },
   gridChip: {
     flex: 1,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: '#292132',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   gridChipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: COLORS.gold,
+    backgroundColor: PALETTE.cream,
+    borderColor: PALETTE.ink,
   },
   gridChipText: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 16,
   },
   gridChipTextActive: {
-    color: COLORS.gold,
+    color: PALETTE.ink,
   },
   footerBar: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 14,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    borderTopWidth: 2,
+    borderTopColor: PALETTE.dustyMauve,
+    backgroundColor: '#271F30',
     gap: 6,
   },
   privacyNote: {
-    color: COLORS.textMuted,
+    color: '#D4C5D8',
     fontSize: 11,
     textAlign: 'center',
   },
   confirmBtn: {
     width: '100%',
     height: 50,
-    borderRadius: 14,
-    backgroundColor: COLORS.gold,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 5,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   confirmBtnText: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 20,
+    letterSpacing: 1.2,
   },
   pressed: {
     transform: [{ scale: 0.98 }],

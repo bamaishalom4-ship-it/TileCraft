@@ -8,12 +8,14 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { isAnonymousSignInAvailable, getExistingSessionUserId } from '../services/supabaseClient';
 import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
 import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
+import { NightSkylineStrip } from '../components/NightSkylineStrip';
 import { formatElapsedTime } from '../hooks/usePuzzleTimer';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 /**
- * Celebratory Win Screen displaying completion stats, idempotent coin reward,
- * Play Again, and optional explicit public upload for private photo puzzles.
+ * Celebratory Win Screen in the Night Bus Stop palette:
+ * deep navy, muted purple, warm amber glow, cream card stock photo frame,
+ * and bold arcade orange Play Again action.
  */
 export const WinScreen: React.FC = () => {
   const isOnline = useOnlineStatus();
@@ -61,6 +63,8 @@ export const WinScreen: React.FC = () => {
 
   return (
     <View style={styles.screen}>
+      <NightSkylineStrip />
+
       <View
         style={styles.starsRow}
         accessibilityLabel={`${summary.stars} out of 3 stars`}
@@ -75,8 +79,8 @@ export const WinScreen: React.FC = () => {
             >
               <Ionicons
                 name={earned ? 'star' : 'star-outline'}
-                size={starIndex === 2 ? 48 : 36}
-                color={earned ? COLORS.gold : COLORS.textMuted}
+                size={starIndex === 2 ? 46 : 34}
+                color={earned ? PALETTE.amberWindow : COLORS.textMuted}
                 style={starIndex === 2 ? styles.centerStar : undefined}
               />
             </View>
@@ -85,27 +89,29 @@ export const WinScreen: React.FC = () => {
       </View>
 
       <Text style={styles.heading} accessibilityRole="header">
-        Puzzle Solved!
+        PUZZLE SOLVED!
       </Text>
       <Text style={styles.subheading}>
         {summary.puzzleTitle} · {summary.gridSize}×{summary.gridSize}
       </Text>
 
       {summary.imageUri ? (
-        <View style={styles.imageFrame}>
-          <Image
-            source={{ uri: summary.imageUri }}
-            style={styles.completedImage}
-            accessibilityLabel={`Completed ${summary.puzzleTitle} image`}
-          />
+        <View style={styles.imageCardStock}>
+          <View style={styles.imageFrame}>
+            <Image
+              source={{ uri: summary.imageUri }}
+              style={styles.completedImage}
+              accessibilityLabel={`Completed ${summary.puzzleTitle} image`}
+            />
+          </View>
         </View>
       ) : (
         <View
-          style={styles.trophyCircle}
+          style={styles.trophyBox}
           importantForAccessibility="no-hide-descendants"
           accessibilityElementsHidden
         >
-          <Ionicons name="trophy" size={56} color={COLORS.gold} />
+          <Ionicons name="trophy" size={50} color={PALETTE.amberWindow} />
         </View>
       )}
 
@@ -124,7 +130,7 @@ export const WinScreen: React.FC = () => {
         <View style={styles.divider} />
         <View style={styles.metricCol}>
           <Text style={styles.metricLabel}>REWARD</Text>
-          <Text style={[styles.metricValue, { color: COLORS.gold }]}>
+          <Text style={[styles.metricValue, { color: PALETTE.arcadeOrange }]}>
             +{summary.coinsEarned} ¢
           </Text>
         </View>
@@ -148,9 +154,9 @@ export const WinScreen: React.FC = () => {
             importantForAccessibility="no-hide-descendants"
             accessibilityElementsHidden
           >
-            <Ionicons name="refresh" size={18} color="#111827" />
+            <Ionicons name="refresh" size={18} color={PALETTE.ink} />
           </View>
-          <Text style={styles.primaryBtnText}>Play Again</Text>
+          <Text style={styles.primaryBtnText}>PLAY AGAIN</Text>
         </Pressable>
 
         {summary.isCustomPuzzle && summary.imageUri ? (
@@ -168,10 +174,16 @@ export const WinScreen: React.FC = () => {
               importantForAccessibility="no-hide-descendants"
               accessibilityElementsHidden
             >
-              <Ionicons name="cloud-upload-outline" size={18} color="#38BDF8" />
+              <Ionicons
+                name="cloud-upload-outline"
+                size={18}
+                color={PALETTE.sunsetPeach}
+              />
             </View>
-            <Text style={[styles.secondaryBtnText, { color: '#38BDF8' }]}>
-              Share to Marketplace
+            <Text
+              style={[styles.secondaryBtnText, { color: PALETTE.sunsetPeach }]}
+            >
+              SHARE TO MARKETPLACE
             </Text>
           </Pressable>
         ) : null}
@@ -185,7 +197,7 @@ export const WinScreen: React.FC = () => {
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.secondaryBtnText}>Back to Home</Text>
+          <Text style={styles.secondaryBtnText}>BACK TO HOME</Text>
         </Pressable>
       </View>
 
@@ -210,83 +222,92 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 22,
-    gap: 12,
+    paddingHorizontal: 18,
+    gap: 11,
+    backgroundColor: COLORS.nightBg,
   },
   starsRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
+    marginTop: 4,
   },
   centerStar: {
     marginBottom: 8,
   },
   heading: {
-    color: COLORS.textPrimary,
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: -0.6,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 30,
+    letterSpacing: 1.4,
   },
   subheading: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
+    color: PALETTE.sunsetPeach,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  imageCardStock: {
+    padding: 8,
+    backgroundColor: COLORS.cardStock,
+    borderRadius: 10,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    marginVertical: 2,
   },
   imageFrame: {
-    padding: 8,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
+    borderRadius: 5,
+    overflow: 'hidden',
     borderWidth: 2,
-    borderColor: COLORS.success,
-    marginVertical: 4,
+    borderColor: PALETTE.ink,
   },
   completedImage: {
-    width: 184,
-    height: 184,
-    borderRadius: 14,
+    width: 174,
+    height: 174,
   },
-  trophyCircle: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    borderWidth: 2,
-    borderColor: 'rgba(245, 158, 11, 0.45)',
+  trophyBox: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2.5,
+    borderColor: PALETTE.amberWindow,
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 6,
+    marginVertical: 4,
   },
   rewardCard: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: '#3B3452',
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   metricCol: {
     flex: 1,
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
   },
   metricLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   metricValue: {
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 20,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
   },
   divider: {
-    width: 1,
-    height: 32,
-    backgroundColor: COLORS.border,
+    width: 1.5,
+    height: 30,
+    backgroundColor: '#3B3452',
   },
   balanceNote: {
     color: COLORS.textSecondary,
@@ -295,41 +316,48 @@ const styles = StyleSheet.create({
   },
   actions: {
     width: '100%',
-    gap: 10,
-    marginTop: 4,
+    gap: 9,
+    marginTop: 2,
   },
   primaryBtn: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: COLORS.gold,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 5,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   primaryBtnText: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 20,
+    letterSpacing: 1,
   },
   secondaryBtn: {
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    height: 45,
+    borderRadius: 8,
+    backgroundColor: COLORS.nightSurface,
+    borderWidth: 2,
+    borderColor: '#3B3452',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   publishBtn: {
-    borderColor: 'rgba(56, 189, 248, 0.45)',
+    borderColor: PALETTE.dustyMauve,
+    backgroundColor: COLORS.nightSurfacePurple,
   },
   secondaryBtnText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 16,
+    letterSpacing: 0.8,
   },
   pressed: {
     transform: [{ scale: 0.98 }],

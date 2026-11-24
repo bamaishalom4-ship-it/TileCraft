@@ -21,7 +21,7 @@ import {
 import { publishPuzzleToMarketplace } from '../services/marketplaceService';
 import { calculateCreatorRoyalty } from '../utils/marketplaceUtils';
 import { showAppDialog } from '../store/useDialogStore';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 const PRICE_PRESETS = [0, 15, 25, 50];
 
@@ -148,7 +148,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
       <View style={styles.backdrop} accessibilityViewIsModal>
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Publish to Marketplace</Text>
+            <Text style={styles.headerTitle}>PUBLISH TO MARKETPLACE</Text>
             <Pressable
               onPress={onClose}
               disabled={submitting}
@@ -156,7 +156,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               accessibilityLabel="Close publish dialog"
               style={styles.closeBtn}
             >
-              <Ionicons name="close" size={20} color={COLORS.textPrimary} />
+              <Ionicons name="close" size={18} color={PALETTE.cream} />
             </Pressable>
           </View>
 
@@ -165,7 +165,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.privacyCallout}>
-              <Ionicons name="globe-outline" size={16} color="#38BDF8" />
+              <Ionicons name="globe-outline" size={16} color={PALETTE.sunsetPeach} />
               <Text style={styles.privacyCalloutText}>
                 Private photo puzzles stay on your device. Publishing uploads a copy publicly for other players.
               </Text>
@@ -206,7 +206,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
                     style={[styles.chip, active && styles.chipActive]}
                   >
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {cat}
+                      {cat.toUpperCase()}
                     </Text>
                   </Pressable>
                 );
@@ -258,7 +258,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
                         active && styles.optionPillTextActive,
                       ]}
                     >
-                      {price === 0 ? 'Free' : `${price} ¢`}
+                      {price === 0 ? 'FREE' : `${price} ¢`}
                     </Text>
                   </Pressable>
                 );
@@ -275,7 +275,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               <Ionicons
                 name={confirmedPublic ? 'checkbox' : 'square-outline'}
                 size={22}
-                color={confirmedPublic ? COLORS.gold : COLORS.textMuted}
+                color={confirmedPublic ? PALETTE.arcadeOrange : COLORS.textMuted}
               />
               <Text style={styles.pledgeText}>
                 I understand this photo will be uploaded publicly for other players, contains no NSFW or private content, and will be scanned by moderation.
@@ -295,13 +295,13 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
             >
               {submitting ? (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#111827" size="small" />
-                  <Text style={styles.submitText}>Uploading & Scanning...</Text>
+                  <ActivityIndicator color={PALETTE.ink} size="small" />
+                  <Text style={styles.submitText}>UPLOADING & SCANNING...</Text>
                 </View>
               ) : (
                 <>
-                  <Ionicons name="cloud-upload" size={18} color="#111827" />
-                  <Text style={styles.submitText}>Publish Publicly</Text>
+                  <Ionicons name="cloud-upload" size={18} color={PALETTE.ink} />
+                  <Text style={styles.submitText}>PUBLISH PUBLICLY</Text>
                 </>
               )}
             </Pressable>
@@ -315,53 +315,56 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 12, 0.78)',
+    backgroundColor: 'rgba(14, 15, 22, 0.82)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: COLORS.nightSurface,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     maxHeight: '88%',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2.5,
+    borderColor: PALETTE.dustyMauve,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomWidth: 2,
+    borderBottomColor: PALETTE.ink,
   },
   headerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 19,
+    letterSpacing: 0.8,
   },
   closeBtn: {
     width: 34,
     height: 34,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: 7,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   body: {
-    padding: 18,
-    gap: 12,
+    padding: 16,
+    gap: 11,
   },
   privacyCallout: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-    borderRadius: 12,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderRadius: 8,
     padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderWidth: 2,
+    borderColor: PALETTE.dustyMauve,
   },
   privacyCalloutText: {
     flex: 1,
@@ -375,63 +378,61 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   thumb: {
-    width: 84,
-    height: 84,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.gold,
+    width: 82,
+    height: 82,
+    borderRadius: 6,
+    borderWidth: 2.5,
+    borderColor: PALETTE.cream,
   },
   titleInputWrap: {
     flex: 1,
     gap: 6,
   },
   label: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 14,
+    letterSpacing: 0.8,
   },
   input: {
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12,
-    color: COLORS.textPrimary,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: '#191C2B',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    paddingHorizontal: 11,
+    color: PALETTE.cream,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   royaltyHint: {
-    color: COLORS.gold,
+    color: PALETTE.amberWindow,
     fontSize: 11,
     fontWeight: '700',
   },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 7,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   chipActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: COLORS.gold,
+    backgroundColor: PALETTE.cream,
   },
   chipText: {
+    fontFamily: FONTS.pixel,
     color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
   },
   chipTextActive: {
-    color: COLORS.gold,
-    fontWeight: '800',
+    color: PALETTE.ink,
   },
   row: {
     flexDirection: 'row',
@@ -439,35 +440,34 @@ const styles = StyleSheet.create({
   },
   optionPill: {
     flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   optionPillActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: COLORS.gold,
+    backgroundColor: PALETTE.cream,
   },
   optionPillText: {
+    fontFamily: FONTS.pixel,
     color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 15,
   },
   optionPillTextActive: {
-    color: COLORS.gold,
+    color: PALETTE.ink,
   },
   pledgeRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: COLORS.surfaceElevated,
+    backgroundColor: COLORS.nightSurfacePurple,
     padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     marginTop: 4,
   },
   pledgeText: {
@@ -477,9 +477,13 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   submitBtn: {
-    height: 52,
-    borderRadius: 14,
-    backgroundColor: COLORS.gold,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 5,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -495,9 +499,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   submitText: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 18,
+    letterSpacing: 0.8,
   },
   pressed: {
     transform: [{ scale: 0.98 }],

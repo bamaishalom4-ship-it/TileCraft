@@ -26,11 +26,13 @@ import { restoreStorePurchases } from '../services/iapService';
 import { CoinBadge } from '../components/CoinBadge';
 import { DailyRewardModal } from '../components/DailyRewardModal';
 import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
-import { COLORS } from '../theme/tokens';
+import { NightSkylineStrip } from '../components/NightSkylineStrip';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 /**
- * TileCraft Shop & Wallet Screen with cross-platform accessible dialogs,
- * offline awareness for network features, and local+cloud coin ledger.
+ * TileCraft Shop & Wallet Screen — Night Bus Stop palette:
+ * deep navy, muted purple cards, warm amber accents, and arcade orange CTAs.
+ * Preserves all existing coin prices, unlocks, ads, and ledger behavior.
  */
 export const ShopScreen: React.FC = () => {
   const isOnline = useOnlineStatus();
@@ -168,11 +170,11 @@ export const ShopScreen: React.FC = () => {
           accessibilityLabel="Back to Home"
           style={styles.iconBtn}
         >
-          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={PALETTE.cream} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} accessibilityRole="header">
-            Coin Shop
+            COIN SHOP
           </Text>
           <Text style={styles.syncTag}>
             {!isOnline
@@ -189,6 +191,8 @@ export const ShopScreen: React.FC = () => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <NightSkylineStrip />
+
         <Text style={styles.sectionTitle}>EARN FREE COINS</Text>
         <View style={styles.earnRow}>
           <Pressable
@@ -208,10 +212,10 @@ export const ShopScreen: React.FC = () => {
               <Ionicons
                 name={streak.canClaimToday ? 'flame' : 'checkmark-circle'}
                 size={24}
-                color={streak.canClaimToday ? COLORS.gold : COLORS.success}
+                color={streak.canClaimToday ? PALETTE.arcadeOrange : COLORS.success}
               />
             </View>
-            <Text style={styles.earnTitle}>Daily Streak</Text>
+            <Text style={styles.earnTitle}>DAILY STREAK</Text>
             <Text style={styles.earnSub}>
               {streak.canClaimToday
                 ? `Day ${streak.nextClaimDay}: +${streak.nextRewardCoins} ¢`
@@ -231,17 +235,17 @@ export const ShopScreen: React.FC = () => {
             ]}
           >
             {watchingAd ? (
-              <ActivityIndicator color="#38BDF8" size="small" />
+              <ActivityIndicator color={PALETTE.amberWindow} size="small" />
             ) : (
               <View
                 importantForAccessibility="no-hide-descendants"
                 accessibilityElementsHidden
               >
-                <Ionicons name="play-circle" size={24} color="#38BDF8" />
+                <Ionicons name="play-circle" size={24} color={PALETTE.amberWindow} />
               </View>
             )}
             <Text style={styles.earnTitle}>
-              {watchingAd ? 'Loading Ad...' : 'Watch Ad'}
+              {watchingAd ? 'LOADING AD...' : 'WATCH AD'}
             </Text>
             <Text style={styles.earnSub}>
               {!isOnline
@@ -261,7 +265,9 @@ export const ShopScreen: React.FC = () => {
             return (
               <View key={upgrade.id} style={styles.upgradeCard}>
                 <View style={styles.upgradeText}>
-                  <Text style={styles.upgradeTitle}>{upgrade.title}</Text>
+                  <Text style={styles.upgradeTitle}>
+                    {upgrade.title.toUpperCase()}
+                  </Text>
                   <Text style={styles.upgradeDesc}>{upgrade.description}</Text>
                 </View>
                 <Pressable
@@ -279,7 +285,7 @@ export const ShopScreen: React.FC = () => {
                   style={[styles.upgradeBtn, owned && styles.upgradeBtnOwned]}
                 >
                   {isBusy ? (
-                    <ActivityIndicator color="#111827" size="small" />
+                    <ActivityIndicator color={PALETTE.ink} size="small" />
                   ) : (
                     <Text
                       style={[
@@ -287,7 +293,7 @@ export const ShopScreen: React.FC = () => {
                         owned && styles.upgradeBtnTextOwned,
                       ]}
                     >
-                      {owned ? 'Owned' : `${upgrade.coinCost} ¢`}
+                      {owned ? 'OWNED' : `${upgrade.coinCost} ¢`}
                     </Text>
                   )}
                 </Pressable>
@@ -326,10 +332,14 @@ export const ShopScreen: React.FC = () => {
               >
                 <View style={styles.packLeft}>
                   <View style={styles.packTitleRow}>
-                    <Text style={styles.packTitle}>{pack.title}</Text>
+                    <Text style={styles.packTitle}>
+                      {pack.title.toUpperCase()}
+                    </Text>
                     {pack.badge ? (
                       <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{pack.badge}</Text>
+                        <Text style={styles.badgeText}>
+                          {pack.badge.toUpperCase()}
+                        </Text>
                       </View>
                     ) : null}
                   </View>
@@ -343,7 +353,7 @@ export const ShopScreen: React.FC = () => {
 
                 <View style={styles.pricePill}>
                   {isBusy ? (
-                    <ActivityIndicator color={COLORS.gold} size="small" />
+                    <ActivityIndicator color={PALETTE.arcadeOrange} size="small" />
                   ) : (
                     <Text style={styles.priceText}>{pack.priceDisplay}</Text>
                   )}
@@ -402,21 +412,22 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 460,
     alignSelf: 'center',
+    backgroundColor: COLORS.nightBg,
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   iconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.nightSurface,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -424,9 +435,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 21,
+    letterSpacing: 1,
   },
   syncTag: {
     color: COLORS.textMuted,
@@ -434,56 +446,59 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   content: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
     paddingBottom: 36,
-    gap: 14,
+    gap: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 6,
+    marginTop: 4,
   },
   sectionTitle: {
-    color: COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-    marginTop: 6,
+    fontFamily: FONTS.pixel,
+    color: PALETTE.amberWindow,
+    fontSize: 15,
+    letterSpacing: 1,
+    marginTop: 4,
   },
   restoreLink: {
-    color: '#38BDF8',
+    color: PALETTE.sunsetPeach,
     fontSize: 12,
     fontWeight: '700',
   },
   earnRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   earnCard: {
     flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    padding: 14,
     alignItems: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: '#3B3452',
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   earnCardHighlight: {
-    borderColor: 'rgba(245, 158, 11, 0.55)',
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: PALETTE.arcadeOrange,
+    backgroundColor: COLORS.nightSurfacePurple,
   },
   disabledCard: {
     opacity: 0.55,
   },
   earnTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 16,
+    letterSpacing: 0.6,
   },
   earnSub: {
-    color: COLORS.gold,
+    color: PALETTE.amberWindow,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
@@ -494,21 +509,24 @@ const styles = StyleSheet.create({
   upgradeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    padding: 13,
     gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: '#3B3452',
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   upgradeText: {
     flex: 1,
     gap: 3,
   },
   upgradeTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 16,
+    letterSpacing: 0.5,
   },
   upgradeDesc: {
     color: COLORS.textSecondary,
@@ -516,41 +534,45 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   upgradeBtn: {
-    minWidth: 74,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: COLORS.gold,
+    minWidth: 76,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 7,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
   },
   upgradeBtnOwned: {
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    borderWidth: 1,
+    backgroundColor: '#1E3C3B',
     borderColor: COLORS.success,
   },
   upgradeBtnText: {
-    color: '#111827',
-    fontSize: 13,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 15,
   },
   upgradeBtnTextOwned: {
-    color: '#6EE7B7',
+    color: PALETTE.cream,
   },
   packCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: '#3B3452',
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   packCardFeatured: {
-    borderColor: 'rgba(245, 158, 11, 0.55)',
+    borderColor: PALETTE.amberWindow,
+    backgroundColor: COLORS.nightSurfacePurple,
   },
   packLeft: {
-    gap: 4,
+    gap: 3,
   },
   packTitleRow: {
     flexDirection: 'row',
@@ -558,47 +580,50 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   packTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
   badge: {
-    backgroundColor: COLORS.gold,
-    paddingHorizontal: 7,
+    backgroundColor: PALETTE.amberWindow,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: PALETTE.ink,
   },
   badgeText: {
-    color: '#111827',
-    fontSize: 9,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 11,
   },
   packCoins: {
     color: COLORS.textSecondary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
   pricePill: {
     minWidth: 68,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: PALETTE.cream,
+    borderRadius: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
   },
   priceText: {
-    color: COLORS.textPrimary,
+    color: PALETTE.ink,
     fontSize: 14,
     fontWeight: '900',
   },
   ledgerCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
     paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderColor: '#3B3452',
   },
   ledgerRow: {
     flexDirection: 'row',
@@ -608,10 +633,10 @@ const styles = StyleSheet.create({
   },
   ledgerRowBorder: {
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: '#35314B',
   },
   ledgerLabel: {
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -629,7 +654,7 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
   deltaNegative: {
-    color: '#F87171',
+    color: PALETTE.sunsetPeach,
   },
   pressed: {
     transform: [{ scale: 0.98 }],

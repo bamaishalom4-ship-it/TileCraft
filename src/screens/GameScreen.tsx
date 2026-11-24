@@ -21,15 +21,14 @@ import {
 } from '../engine/puzzleEngine';
 import { evaluateWinPerformance } from '../utils/imageCropUtils';
 import { formatElapsedTime, usePuzzleTimer } from '../hooks/usePuzzleTimer';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 /**
  * Active Puzzle Gameplay Screen:
- * - First-time numbered puzzle goal guidance + highlighted legal first move
- * - One free introductory hint (normal 25 ¢ price remains visible)
- * - Shuffle confirmation dialog when meaningful progress exists
- * - Escape-dismissible Peek Target modal + focus restoration
- * - Pause-safe active timer & idempotent Win Screen transition
+ * - Classic mode: Dusty cream, faded teal, and brick red arcade HUD (Boxing Gym palette)
+ * - Photo mode: Sunset peach, dusty blue, and muted mauve HUD (Sunset Office palette)
+ *   with the player's photo kept completely unfiltered and unpixelated
+ * - Board remains the brightest, clearest focal point on screen (zero distracting animations)
  */
 export const GameScreen: React.FC = () => {
   usePuzzleTimer();
@@ -64,6 +63,8 @@ export const GameScreen: React.FC = () => {
   const spendHintCoins = useAppStore((s) => s.spendHintCoins);
   const consumeFreeIntroHint = useAppStore((s) => s.consumeFreeIntroHint);
   const recordWin = useAppStore((s) => s.recordWin);
+
+  const isPhotoMode = Boolean(imageUri);
 
   // Escape dismissal & focus restoration for Peek Target modal
   useEffect(() => {
@@ -197,25 +198,37 @@ export const GameScreen: React.FC = () => {
   const totalTiles = gridSize * gridSize - 1;
   const correctTiles = countCorrectTiles(board);
 
+  const hudSurface = isPhotoMode ? COLORS.photoSurface : COLORS.classicSurface;
+  const hudBorder = isPhotoMode ? PALETTE.dustyMauve : PALETTE.cityTeal;
+  const hudAccent = isPhotoMode ? PALETTE.sunsetPeach : PALETTE.brickRed;
+
   return (
     <View style={styles.screen}>
       {/* Top Navigation Bar */}
       <View style={styles.navBar}>
         <Pressable
           onPress={handleBackToMenu}
-          style={styles.iconBtn}
+          style={[
+            styles.iconBtn,
+            { backgroundColor: hudSurface, borderColor: hudBorder },
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Back to Home"
         >
-          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="chevron-back" size={20} color={PALETTE.cream} />
         </Pressable>
 
         <View style={styles.titleCenter}>
           <Text style={styles.puzzleTitle} numberOfLines={1}>
-            {activePuzzleTitle}
+            {activePuzzleTitle.toUpperCase()}
           </Text>
-          <Text style={styles.gridBadgeText}>
-            {gridSize}×{gridSize} {imageUri ? 'Photo' : 'Classic'}
+          <Text
+            style={[
+              styles.gridBadgeText,
+              { color: isPhotoMode ? PALETTE.sunsetPeach : PALETTE.dustyCream },
+            ]}
+          >
+            {gridSize}×{gridSize} {imageUri ? 'PHOTO' : 'CLASSIC'}
           </Text>
         </View>
 
@@ -229,14 +242,14 @@ export const GameScreen: React.FC = () => {
         />
       </View>
 
-      {/* First-Time Numbered Puzzle Goal Guide */}
+      {/* First-Time Numbered Puzzle Goal Guide (readable sans-serif) */}
       {showFirstTimeGuide ? (
         <View style={styles.guideBanner}>
           <View
             importantForAccessibility="no-hide-descendants"
             accessibilityElementsHidden
           >
-            <Ionicons name="sparkles" size={16} color="#38BDF8" />
+            <Ionicons name="sparkles" size={16} color={PALETTE.arcadeOrange} />
           </View>
           <Text style={styles.guideText}>
             Tap a tile next to the gap. Put the numbers in order, with the gap at the bottom right.
@@ -246,20 +259,68 @@ export const GameScreen: React.FC = () => {
 
       {/* Stats Strip */}
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>MOVES</Text>
+        <View
+          style={[
+            styles.statCard,
+            {
+              backgroundColor: hudSurface,
+              borderColor: hudBorder,
+              borderTopColor: hudAccent,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statLabel,
+              { color: isPhotoMode ? PALETTE.sunsetPeach : PALETTE.dustyCream },
+            ]}
+          >
+            MOVES
+          </Text>
           <Text style={styles.statValue} testID="moves-value">
             {moves}
           </Text>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>TIME</Text>
+        <View
+          style={[
+            styles.statCard,
+            {
+              backgroundColor: hudSurface,
+              borderColor: hudBorder,
+              borderTopColor: hudAccent,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statLabel,
+              { color: isPhotoMode ? PALETTE.sunsetPeach : PALETTE.dustyCream },
+            ]}
+          >
+            TIME
+          </Text>
           <Text style={styles.statValue} testID="time-value">
             {formatElapsedTime(elapsedSeconds)}
           </Text>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>PLACED</Text>
+        <View
+          style={[
+            styles.statCard,
+            {
+              backgroundColor: hudSurface,
+              borderColor: hudBorder,
+              borderTopColor: hudAccent,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statLabel,
+              { color: isPhotoMode ? PALETTE.sunsetPeach : PALETTE.dustyCream },
+            ]}
+          >
+            PLACED
+          </Text>
           <Text style={styles.statValue}>
             {correctTiles}/{totalTiles}
           </Text>
@@ -280,7 +341,10 @@ export const GameScreen: React.FC = () => {
               onPress={() => setPeekVisible(true)}
               accessibilityRole="button"
               accessibilityLabel="Peek at target image"
-              style={styles.toolChip}
+              style={[
+                styles.toolChip,
+                { backgroundColor: COLORS.photoSurfaceAlt },
+              ]}
             >
               <View
                 importantForAccessibility="no-hide-descendants"
@@ -289,10 +353,10 @@ export const GameScreen: React.FC = () => {
                 <Ionicons
                   name="eye-outline"
                   size={16}
-                  color={COLORS.textPrimary}
+                  color={PALETTE.sunsetPeach}
                 />
               </View>
-              <Text style={styles.toolChipText}>Peek Target</Text>
+              <Text style={styles.toolChipText}>PEEK TARGET</Text>
             </Pressable>
 
             <Pressable
@@ -300,7 +364,10 @@ export const GameScreen: React.FC = () => {
               accessibilityRole="button"
               accessibilityLabel={`Tile numbers overlay, currently ${showTileNumbers ? 'on' : 'off'}`}
               accessibilityState={{ selected: showTileNumbers }}
-              style={styles.toolChip}
+              style={[
+                styles.toolChip,
+                { backgroundColor: COLORS.photoSurfaceAlt },
+              ]}
             >
               <View
                 importantForAccessibility="no-hide-descendants"
@@ -309,11 +376,13 @@ export const GameScreen: React.FC = () => {
                 <Ionicons
                   name={showTileNumbers ? 'pricetag' : 'pricetag-outline'}
                   size={15}
-                  color={showTileNumbers ? COLORS.gold : COLORS.textSecondary}
+                  color={
+                    showTileNumbers ? PALETTE.arcadeOrange : PALETTE.sunsetPeach
+                  }
                 />
               </View>
               <Text style={styles.toolChipText}>
-                Numbers: {showTileNumbers ? 'On' : 'Off'}
+                NUMBERS: {showTileNumbers ? 'ON' : 'OFF'}
               </Text>
             </Pressable>
           </View>
@@ -333,6 +402,7 @@ export const GameScreen: React.FC = () => {
             style={({ pressed }) => [
               styles.actionBtn,
               styles.hintBtn,
+              { backgroundColor: hudSurface },
               status === 'solved' && styles.disabledBtn,
               pressed && styles.pressedBtn,
             ]}
@@ -342,10 +412,10 @@ export const GameScreen: React.FC = () => {
                 importantForAccessibility="no-hide-descendants"
                 accessibilityElementsHidden
               >
-                <Ionicons name="bulb" size={17} color={COLORS.gold} />
+                <Ionicons name="bulb" size={16} color={PALETTE.arcadeOrange} />
               </View>
               <Text style={styles.hintBtnText}>
-                {isFreeIntroHintAvailable ? 'Free Hint' : 'Hint'}
+                {isFreeIntroHintAvailable ? 'FREE HINT' : 'HINT'}
               </Text>
             </View>
             <Text style={styles.hintCostText}>
@@ -361,7 +431,7 @@ export const GameScreen: React.FC = () => {
             accessibilityLabel="Shuffle board"
             style={({ pressed }) => [
               styles.actionBtn,
-              styles.shuffleBtn,
+              isPhotoMode ? styles.shuffleBtnPhoto : styles.shuffleBtnClassic,
               pressed && styles.pressedBtn,
             ]}
           >
@@ -369,9 +439,20 @@ export const GameScreen: React.FC = () => {
               importantForAccessibility="no-hide-descendants"
               accessibilityElementsHidden
             >
-              <Ionicons name="shuffle" size={18} color="#111827" />
+              <Ionicons
+                name="shuffle"
+                size={18}
+                color={isPhotoMode ? PALETTE.ink : PALETTE.cream}
+              />
             </View>
-            <Text style={styles.shuffleBtnText}>Shuffle</Text>
+            <Text
+              style={[
+                styles.shuffleBtnText,
+                { color: isPhotoMode ? PALETTE.ink : PALETTE.cream },
+              ]}
+            >
+              SHUFFLE
+            </Text>
           </Pressable>
         </View>
 
@@ -392,11 +473,15 @@ export const GameScreen: React.FC = () => {
           accessibilityLabel="Close target image preview"
         >
           <View style={styles.peekCard}>
-            <Text style={styles.peekTitle}>Target Image</Text>
+            <Text style={styles.peekTitle}>TARGET IMAGE</Text>
             {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.peekImage} />
+              <View style={styles.peekImageFrame}>
+                <Image source={{ uri: imageUri }} style={styles.peekImage} />
+              </View>
             ) : null}
-            <Text style={styles.peekHint}>Tap anywhere or press Esc to return</Text>
+            <Text style={styles.peekHint}>
+              Tap anywhere or press Esc to return
+            </Text>
           </View>
         </Pressable>
       </Modal>
@@ -412,7 +497,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
   },
@@ -426,10 +511,8 @@ const styles = StyleSheet.create({
   iconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -438,14 +521,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   puzzleTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 19,
+    letterSpacing: 0.8,
   },
   gridBadgeText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
+    fontFamily: FONTS.pixel,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   guideBanner: {
     width: '100%',
@@ -453,16 +537,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: PALETTE.cream,
+    borderRadius: 8,
+    paddingHorizontal: 11,
     paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.35)',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   guideText: {
     flex: 1,
-    color: '#E0F2FE',
+    color: PALETTE.ink,
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '600',
@@ -471,27 +555,25 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   statCard: {
     flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    paddingVertical: 8,
+    borderRadius: 8,
+    paddingVertical: 7,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderWidth: 2,
+    borderTopWidth: 3,
   },
   statLabel: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
+    fontFamily: FONTS.pixel,
+    fontSize: 13,
+    letterSpacing: 0.8,
   },
   statValue: {
-    color: COLORS.textPrimary,
+    color: PALETTE.cream,
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '900',
     marginTop: 1,
     fontVariant: ['tabular-nums'],
   },
@@ -502,7 +584,7 @@ const styles = StyleSheet.create({
   },
   photoToolsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   toolChip: {
     flex: 1,
@@ -511,31 +593,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 9,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   toolChipText: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 14,
+    letterSpacing: 0.6,
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
   },
   actionBtn: {
     flex: 1,
     height: 52,
-    borderRadius: 14,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   hintBtn: {
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1.5,
-    borderColor: COLORS.gold,
+    borderWidth: 2,
+    borderColor: PALETTE.arcadeOrange,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.ink,
   },
   hintRow: {
     flexDirection: 'row',
@@ -543,24 +626,38 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   hintBtnText: {
-    color: COLORS.gold,
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 17,
+    letterSpacing: 0.8,
   },
   hintCostText: {
-    color: COLORS.textSecondary,
+    color: PALETTE.dustyCream,
     fontSize: 10,
     fontWeight: '700',
   },
-  shuffleBtn: {
-    backgroundColor: COLORS.gold,
+  shuffleBtnClassic: {
+    backgroundColor: PALETTE.brickRed,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.brickRedDark,
     flexDirection: 'row',
-    gap: 6,
+    gap: 7,
+  },
+  shuffleBtnPhoto: {
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    borderBottomWidth: 4,
+    borderBottomColor: PALETTE.arcadeOrangeDeep,
+    flexDirection: 'row',
+    gap: 7,
   },
   shuffleBtnText: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    fontSize: 18,
+    letterSpacing: 1,
   },
   disabledBtn: {
     opacity: 0.45,
@@ -570,32 +667,39 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 12, 0.82)',
+    backgroundColor: 'rgba(14, 15, 22, 0.84)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
   peekCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 18,
+    backgroundColor: COLORS.cardStock,
+    borderRadius: 10,
+    padding: 16,
     alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    gap: 10,
+    borderWidth: 3,
+    borderColor: PALETTE.ink,
   },
   peekTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 18,
+    letterSpacing: 1,
+  },
+  peekImageFrame: {
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 2.5,
+    borderColor: PALETTE.ink,
   },
   peekImage: {
     width: 280,
     height: 280,
-    borderRadius: 14,
   },
   peekHint: {
-    color: COLORS.textMuted,
+    color: '#4E4B45',
     fontSize: 12,
+    fontWeight: '600',
   },
 });

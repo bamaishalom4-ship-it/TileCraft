@@ -6,12 +6,11 @@ import {
   triggerPwaInstallPrompt,
   type PwaInstallState,
 } from '../utils/pwa';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 /**
  * Dismissible in-app PWA Install banner shown only on Web when TileCraft is
- * running in a browser tab (hides automatically once installed as standalone app
- * or on native iOS/Android builds).
+ * running in a browser tab.
  */
 export const InstallPwaBanner: React.FC = () => {
   const [dismissed, setDismissed] = useState(false);
@@ -40,10 +39,10 @@ export const InstallPwaBanner: React.FC = () => {
     <View style={styles.banner}>
       <View style={styles.left}>
         <View style={styles.iconWrap}>
-          <Ionicons name="download-outline" size={18} color="#38BDF8" />
+          <Ionicons name="download-outline" size={18} color={PALETTE.cream} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Install TileCraft App</Text>
+          <Text style={styles.title}>INSTALL TILECRAFT</Text>
           <Text style={styles.subtitle}>
             {pwaState.canPromptNativeInstall
               ? 'Play full-screen & offline right from your home screen.'
@@ -60,7 +59,7 @@ export const InstallPwaBanner: React.FC = () => {
             }}
             style={styles.installBtn}
           >
-            <Text style={styles.installBtnText}>Install</Text>
+            <Text style={styles.installBtnText}>INSTALL</Text>
           </Pressable>
         ) : null}
 
@@ -81,13 +80,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-    borderRadius: 16,
+    backgroundColor: '#1E343D',
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    paddingVertical: 10,
     gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
+    borderWidth: 2,
+    borderColor: PALETTE.cityTeal,
   },
   left: {
     flex: 1,
@@ -98,15 +97,18 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(56, 189, 248, 0.16)',
+    borderRadius: 6,
+    backgroundColor: PALETTE.cityTeal,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   subtitle: {
     color: COLORS.textSecondary,
@@ -120,15 +122,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   installBtn: {
-    backgroundColor: '#38BDF8',
-    paddingHorizontal: 12,
+    backgroundColor: PALETTE.arcadeOrange,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 9,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   installBtnText: {
-    color: '#082F49',
-    fontSize: 12,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 14,
   },
   closeBtn: {
     padding: 4,

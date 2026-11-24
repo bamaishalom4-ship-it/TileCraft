@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useDialogStore } from '../store/useDialogStore';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 /**
  * Keyboard-accessible modal dialog host supporting Escape dismissal
@@ -66,7 +66,7 @@ export const AppDialogHost: React.FC = () => {
         accessibilityRole="alert"
       >
         <View style={styles.card}>
-          <Text style={styles.title}>{current.title}</Text>
+          <Text style={styles.title}>{current.title.toUpperCase()}</Text>
           <Text style={styles.message}>{current.message}</Text>
 
           <View style={styles.actionsRow}>
@@ -97,7 +97,7 @@ export const AppDialogHost: React.FC = () => {
                       isDestructive && styles.destructiveText,
                     ]}
                   >
-                    {action.label}
+                    {action.label.toUpperCase()}
                   </Text>
                 </Pressable>
               );
@@ -112,7 +112,7 @@ export const AppDialogHost: React.FC = () => {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 7, 12, 0.8)',
+    backgroundColor: 'rgba(14, 15, 22, 0.84)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -120,17 +120,20 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 20,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 10,
+    padding: 18,
+    gap: 10,
+    borderWidth: 2.5,
+    borderColor: PALETTE.dustyMauve,
+    borderBottomWidth: 5,
+    borderBottomColor: PALETTE.ink,
   },
   title: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 20,
+    letterSpacing: 0.6,
   },
   message: {
     color: COLORS.textSecondary,
@@ -141,38 +144,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
     marginTop: 6,
   },
   actionBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: COLORS.surfaceElevated,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    minWidth: 84,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 7,
+    backgroundColor: COLORS.nightSurfacePurple,
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
+    minWidth: 80,
     alignItems: 'center',
   },
   primaryBtn: {
-    backgroundColor: COLORS.gold,
-    borderColor: COLORS.gold,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderColor: PALETTE.ink,
   },
   destructiveBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.16)',
-    borderColor: 'rgba(239, 68, 68, 0.55)',
+    backgroundColor: PALETTE.brickRed,
+    borderColor: PALETTE.ink,
   },
   actionText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 15,
+    letterSpacing: 0.6,
   },
   primaryText: {
-    color: '#111827',
-    fontWeight: '900',
+    color: PALETTE.ink,
   },
   destructiveText: {
-    color: '#FCA5A5',
+    color: PALETTE.cream,
   },
   pressed: {
     opacity: 0.88,

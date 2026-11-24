@@ -1,6 +1,7 @@
 import {
   copyFileSync,
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
@@ -35,12 +36,22 @@ if (!existsSync(indexHtmlPath)) {
   process.exit(1);
 }
 
-// 1. Copy public assets into dist/
-if (existsSync(publicDir)) {
-  for (const file of readdirSync(publicDir)) {
-    copyFileSync(join(publicDir, file), join(distDir, file));
+// 1. Recursively copy public assets (including public/fonts/) into dist/
+function copyRecursive(srcDir, targetDir) {
+  if (!existsSync(srcDir)) return;
+  mkdirSync(targetDir, { recursive: true });
+  for (const entry of readdirSync(srcDir)) {
+    const srcPath = join(srcDir, entry);
+    const destPath = join(targetDir, entry);
+    if (statSync(srcPath).isDirectory()) {
+      copyRecursive(srcPath, destPath);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
   }
 }
+
+copyRecursive(publicDir, distDir);
 
 // 2. Collect build-hashed JS bundle & required Ionicons font for deterministic SW precaching
 function walkFiles(dir, out = []) {
@@ -65,6 +76,8 @@ const precacheUrls = new Set([
   '/maskable-512.png',
   '/apple-touch-icon.png',
   '/favicon.png',
+  '/fonts/Silkscreen-Bold.ttf',
+  '/fonts/PixelOperator-Bold.ttf',
 ]);
 
 for (const file of walkFiles(join(distDir, '_expo'))) {
@@ -130,7 +143,23 @@ const staticHeadBlock = `
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${PAGE_TITLE}" />
   <meta name="twitter:description" content="${PAGE_DESCRIPTION}" />
-  <meta name="twitter:image" content="${CANONICAL_ORIGIN}/og-preview.png" />`;
+  <meta name="twitter:image" content="${CANONICAL_ORIGIN}/og-preview.png" />
+  <style id="tilecraft-fonts">
+    @font-face {
+      font-family: 'SilkscreenBold';
+      src: url('/fonts/Silkscreen-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'PixelOperatorBold';
+      src: url('/fonts/PixelOperator-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+  </style>`;
 
 if (!html.includes('property="og:image"')) {
   html = html.replace('</head>', `${staticHeadBlock}\n</head>`);

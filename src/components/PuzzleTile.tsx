@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import type { GridSize, MoveDirection } from '../types/puzzle';
 import { getTileTargetPosition, indexToPosition } from '../engine/puzzleEngine';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 interface PuzzleTileProps {
   tileValue: number;
@@ -36,8 +36,12 @@ const DIRECTION_ARROWS: Record<MoveDirection, string> = {
 };
 
 /**
- * Individual tactile sliding tile with smooth spring transitions,
- * first-move tutorial highlight, A* hint pulse, and full accessibility semantics.
+ * Individual tactile sliding tile:
+ * - Classic mode: chunky dusty-cream block with crisp ink border, warm tactile lip,
+ *   and bold high-contrast numerals readable at 3×3, 4×4, and 5×5.
+ * - Photo mode: player's photo slice stays completely unfiltered and unpixelated.
+ * - Preserves spring transitions, first-move tutorial highlight, A* hint pulse,
+ *   and full accessibility semantics.
  */
 export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
   ({
@@ -118,7 +122,7 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
     const tileRenderSize = cellSize - tileGap;
     const isInCorrectSlot = currentIndex === tileValue - 1;
     const targetPos = getTileTargetPosition(tileValue, gridSize);
-    const fontSize = gridSize === 3 ? 34 : gridSize === 4 ? 26 : 20;
+    const fontSize = gridSize === 3 ? 36 : gridSize === 4 ? 27 : 21;
 
     const accessibilityLabel = `Tile ${tileValue}, row ${row + 1} column ${col + 1}${
       isHinted
@@ -129,6 +133,14 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
         ? ', movable'
         : ''
     }${isInCorrectSlot ? ', in correct position' : ''}`;
+
+    const borderColor = isHinted
+      ? PALETTE.arcadeOrange
+      : isIntroSuggested
+      ? PALETTE.arcadeOrange
+      : isSolvedBoard
+      ? PALETTE.brickRed
+      : PALETTE.ink;
 
     return (
       <Animated.View
@@ -152,27 +164,32 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
             {
               width: tileRenderSize,
               height: tileRenderSize,
-              borderRadius: gridSize === 5 ? 7 : 10,
-              backgroundColor: isHinted
+              borderRadius: gridSize === 5 ? 6 : 8,
+              backgroundColor: imageUri
+                ? PALETTE.ink
+                : isHinted
                 ? COLORS.tileHintBg
-                : isIntroSuggested && !imageUri
-                ? '#FEF9C3'
-                : isInCorrectSlot && !imageUri
+                : isIntroSuggested
+                ? '#FDE4BA'
+                : isInCorrectSlot
                 ? COLORS.tileCorrectBg
                 : COLORS.tileFace,
-              borderColor: isHinted
-                ? COLORS.tileHintBorder
-                : isIntroSuggested
-                ? '#38BDF8'
-                : isSolvedBoard
-                ? COLORS.tileCorrectBorder
-                : COLORS.tileShadow,
-              borderWidth: highlighted ? 2.5 : 1.5,
+              borderColor,
+              borderWidth: highlighted ? 2.5 : 2,
+              borderBottomWidth: imageUri ? 2 : 4,
+              borderBottomColor: highlighted
+                ? PALETTE.arcadeOrangeDeep
+                : imageUri
+                ? PALETTE.ink
+                : '#BFA982',
               opacity: pressed ? 0.92 : 1,
             },
           ]}
         >
-          <View style={styles.bevelHighlight} pointerEvents="none" />
+          {/* Crisp top tactile bevel ONLY on numbered Classic tiles (never over photos) */}
+          {!imageUri ? (
+            <View style={styles.bevelHighlight} pointerEvents="none" />
+          ) : null}
 
           {imageUri ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -192,13 +209,21 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
           ) : null}
 
           {(!imageUri || showTileNumbers) && (
-            <View style={imageUri ? styles.photoBadge : undefined}>
+            <View
+              style={
+                imageUri
+                  ? styles.photoBadge
+                  : isIntroSuggested && gridSize === 5
+                  ? styles.numberLiftSmall
+                  : undefined
+              }
+            >
               <Text
                 style={[
                   styles.tileNumber,
                   {
                     fontSize: imageUri ? 12 : fontSize,
-                    color: imageUri ? COLORS.textPrimary : COLORS.tileText,
+                    color: imageUri ? PALETTE.cream : COLORS.tileText,
                   },
                 ]}
               >
@@ -212,8 +237,20 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
           )}
 
           {isIntroSuggested && !isHinted && (
-            <View style={styles.tryBadge}>
-              <Text style={styles.tryBadgeText}>TAP</Text>
+            <View
+              style={[
+                styles.tryBadge,
+                gridSize === 5 && styles.tryBadgeCompact,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tryBadgeText,
+                  gridSize === 5 && styles.tryBadgeTextCompact,
+                ]}
+              >
+                TAP
+              </Text>
             </View>
           )}
 
@@ -242,72 +279,88 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 3,
-    elevation: 4,
   },
   bevelHighlight: {
     position: 'absolute',
-    top: 1,
-    left: 1,
-    right: 1,
-    height: '40%',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: COLORS.tileHighlight,
   },
   tileNumber: {
-    fontWeight: '800',
+    fontWeight: '900',
     letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
   },
   photoBadge: {
     position: 'absolute',
     top: 4,
     left: 4,
-    backgroundColor: 'rgba(15, 19, 29, 0.72)',
+    backgroundColor: 'rgba(22, 24, 32, 0.84)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: PALETTE.cream,
   },
   correctDot: {
     position: 'absolute',
-    bottom: 6,
-    right: 6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.success,
+    bottom: 5,
+    right: 5,
+    width: 7,
+    height: 7,
+    borderRadius: 2,
+    backgroundColor: PALETTE.brickRed,
+    borderWidth: 1,
+    borderColor: PALETTE.ink,
   },
   tryBadge: {
     position: 'absolute',
     bottom: 4,
     right: 4,
-    backgroundColor: '#38BDF8',
+    backgroundColor: PALETTE.arcadeOrange,
     paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
+  },
+  tryBadgeCompact: {
+    bottom: 2,
+    right: 2,
+    paddingHorizontal: 3,
+    paddingVertical: 0,
+    borderWidth: 1,
   },
   tryBadgeText: {
-    color: '#082F49',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.ink,
+    fontSize: 11,
+    letterSpacing: 0.4,
+  },
+  tryBadgeTextCompact: {
     fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    lineHeight: 11,
+  },
+  numberLiftSmall: {
+    marginBottom: 9,
   },
   hintArrowBadge: {
     position: 'absolute',
     bottom: 4,
     right: 4,
-    backgroundColor: COLORS.gold,
+    backgroundColor: PALETTE.arcadeOrange,
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   hintArrowText: {
-    color: '#111827',
+    color: PALETTE.ink,
     fontSize: 13,
     fontWeight: '900',
   },

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 const YOUTUBE_URL = 'https://youtube.com/@madebykubo';
 const INSTAGRAM_URL = 'https://www.instagram.com/madebykubo';
@@ -14,7 +14,7 @@ interface MadeByKuboFooterProps {
 }
 
 /**
- * Creator footer modeled after BrainSweep's signature MadeByKubo credit bar.
+ * Creator footer bar in muted arcade tones.
  */
 export const MadeByKuboFooter: React.FC<MadeByKuboFooterProps> = ({
   variant = 'full',
@@ -73,12 +73,12 @@ const styles = StyleSheet.create({
   fullContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 8,
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(45, 55, 82, 0.55)',
-    gap: 8,
+    borderTopColor: 'rgba(114, 92, 118, 0.35)',
+    gap: 6,
   },
   compactContainer: {
     width: '100%',
@@ -89,11 +89,11 @@ const styles = StyleSheet.create({
   creditText: {
     color: COLORS.textMuted,
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontWeight: '600',
+    letterSpacing: 0.4,
   },
   brandHighlight: {
-    color: COLORS.textSecondary,
+    color: PALETTE.dustyCream,
     fontWeight: '800',
   },
   linksRow: {
@@ -110,9 +110,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   linkText: {
-    color: COLORS.gold,
-    fontSize: 11,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.sunsetPeach,
+    fontSize: 13,
     letterSpacing: 0.8,
   },
 });

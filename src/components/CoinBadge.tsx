@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/tokens';
+import { COLORS, FONTS, PALETTE } from '../theme/tokens';
 
 interface CoinBadgeProps {
   coins: number;
@@ -11,8 +11,8 @@ interface CoinBadgeProps {
 }
 
 /**
- * Reusable header Coin pill displaying the player's coin balance.
- * Shows a subtle placeholder while wallet hydration is in progress so defaults never flash.
+ * Reusable header Coin pill displaying the player's coin balance
+ * in chunky 16-bit arcade styling.
  */
 export const CoinBadge: React.FC<CoinBadgeProps> = ({
   coins,
@@ -53,7 +53,7 @@ export const CoinBadge: React.FC<CoinBadgeProps> = ({
           importantForAccessibility="no-hide-descendants"
           accessibilityElementsHidden
         >
-          <Ionicons name="add" size={14} color="#111827" />
+          <Ionicons name="add" size={14} color={PALETTE.ink} />
         </View>
       ) : null}
     </Pressable>
@@ -64,14 +64,14 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 999,
-    paddingLeft: 6,
-    paddingRight: 8,
-    paddingVertical: 5,
+    backgroundColor: COLORS.nightSurface,
+    borderRadius: 8,
+    paddingLeft: 5,
+    paddingRight: 7,
+    paddingVertical: 4,
     gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.45)',
+    borderWidth: 2,
+    borderColor: PALETTE.ink,
   },
   pillPressed: {
     opacity: 0.85,
@@ -80,31 +80,35 @@ const styles = StyleSheet.create({
   coinIcon: {
     width: 22,
     height: 22,
-    borderRadius: 11,
-    backgroundColor: COLORS.gold,
+    borderRadius: 5,
+    backgroundColor: PALETTE.arcadeOrange,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   coinSymbol: {
-    color: '#111827',
+    color: PALETTE.ink,
     fontSize: 13,
     fontWeight: '900',
   },
   coinCount: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.pixel,
+    color: PALETTE.cream,
+    fontSize: 17,
     fontVariant: ['tabular-nums'],
-    minWidth: 24,
+    minWidth: 26,
     textAlign: 'center',
   },
   plusWrap: {
     width: 18,
     height: 18,
-    borderRadius: 9,
-    backgroundColor: COLORS.gold,
+    borderRadius: 4,
+    backgroundColor: PALETTE.amberWindow,
+    borderWidth: 1.5,
+    borderColor: PALETTE.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 2,
+    marginLeft: 1,
   },
 });
