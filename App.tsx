@@ -8,6 +8,7 @@ import { GameScreen } from './src/screens/GameScreen';
 import { WinScreen } from './src/screens/WinScreen';
 import { ShopScreen } from './src/screens/ShopScreen';
 import { ImageCropperScreen } from './src/screens/ImageCropperScreen';
+import { MarketplaceScreen } from './src/screens/MarketplaceScreen';
 import { COLORS } from './src/theme/tokens';
 
 function TileCraftRoot() {
@@ -25,6 +26,8 @@ function TileCraftRoot() {
         return <ShopScreen />;
       case 'cropper':
         return <ImageCropperScreen />;
+      case 'marketplace':
+        return <MarketplaceScreen />;
       default:
         return <MainMenuScreen />;
     }

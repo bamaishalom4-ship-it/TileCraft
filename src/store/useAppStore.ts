@@ -80,6 +80,7 @@ interface AppStoreState {
   recordWin: (summary: WinSummary) => void;
   spendCoins: (amount: number) => boolean;
   grantCoins: (amount: number) => void;
+  setCoinsFromServer: (balance: number) => void;
   claimDailyRewardPreview: () => boolean;
   purchaseUpgrade: (upgradeId: ShopUpgrade['id']) => boolean;
 }
@@ -129,6 +130,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   grantCoins: (amount) =>
     set((state) => ({ coins: state.coins + amount })),
+
+  setCoinsFromServer: (balance) =>
+    set({ coins: Math.max(0, Math.floor(balance)) }),
 
   claimDailyRewardPreview: () => {
     const { dailyClaimedToday } = get();

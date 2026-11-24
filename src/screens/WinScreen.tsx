@@ -1,8 +1,9 @@
-import React from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
 import { usePuzzleStore } from '../store/usePuzzleStore';
+import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
 import { formatElapsedTime } from '../hooks/usePuzzleTimer';
 import { COLORS } from '../theme/tokens';
 
@@ -11,9 +12,10 @@ import { COLORS } from '../theme/tokens';
  * - Completed un-sliced custom image (or trophy badge for classic mode)
  * - 1–3 Star rating based on move efficiency & time
  * - Coin reward credited to player balance
- * - Quick actions: Play Again, Publish to Marketplace (Phase 3), Main Menu
+ * - Quick actions: Play Again, Publish to Marketplace, Main Menu
  */
 export const WinScreen: React.FC = () => {
+  const [publishOpen, setPublishOpen] = useState(false);
   const summary = useAppStore((s) => s.lastWinSummary);
   const coins = useAppStore((s) => s.coins);
   const navigate = useAppStore((s) => s.navigate);
@@ -101,14 +103,9 @@ export const WinScreen: React.FC = () => {
           <Text style={styles.primaryBtnText}>Play Again</Text>
         </Pressable>
 
-        {summary.isCustomPuzzle ? (
+        {summary.isCustomPuzzle && summary.imageUri ? (
           <Pressable
-            onPress={() =>
-              Alert.alert(
-                'Publish to Marketplace (Phase 3)',
-                'In Phase 3, this uploads your cropped 1:1 puzzle to Supabase Storage, runs automated NSFW moderation, and earns you coins when other players download it!'
-              )
-            }
+            onPress={() => setPublishOpen(true)}
             style={({ pressed }) => [
               styles.secondaryBtn,
               styles.publishBtn,
@@ -132,6 +129,14 @@ export const WinScreen: React.FC = () => {
           <Text style={styles.secondaryBtnText}>Back to Main Menu</Text>
         </Pressable>
       </View>
+
+      <PublishPuzzleModal
+        visible={publishOpen}
+        localImageUri={summary.imageUri}
+        initialTitle={summary.puzzleTitle}
+        initialGridSize={summary.gridSize}
+        onClose={() => setPublishOpen(false)}
+      />
     </View>
   );
 };

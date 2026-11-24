@@ -284,12 +284,7 @@ export const MainMenuScreen: React.FC = () => {
         </Pressable>
 
         <Pressable
-          onPress={() =>
-            Alert.alert(
-              'UGC Marketplace (Phase 3)',
-              'Browse, download, and publish moderated community puzzles powered by Supabase — coming next in Phase 3!'
-            )
-          }
+          onPress={() => navigate('marketplace')}
           style={({ pressed }) => [
             styles.halfCard,
             pressed && styles.pressedScale,
@@ -297,7 +292,7 @@ export const MainMenuScreen: React.FC = () => {
         >
           <Ionicons name="globe-outline" size={22} color="#38BDF8" />
           <Text style={styles.halfCardTitle}>Marketplace</Text>
-          <Text style={styles.halfCardSub}>Phase 3 Cloud UGC</Text>
+          <Text style={styles.halfCardSub}>Browse & Publish UGC</Text>
         </Pressable>
       </View>
 

@@ -1,6 +1,6 @@
 import type { GridSize } from './puzzle';
 
-export type ScreenName = 'menu' | 'game' | 'win' | 'shop' | 'cropper';
+export type ScreenName = 'menu' | 'game' | 'win' | 'shop' | 'cropper' | 'marketplace';
 
 export interface CustomPuzzleItem {
   id: string;
