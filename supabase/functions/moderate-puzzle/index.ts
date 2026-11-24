@@ -61,7 +61,12 @@ async function moderateWithOpenAI(
   });
 
   if (!response.ok) {
-    return { status: 'pending', reason: 'Moderation provider unavailable; queued for review' };
+    const errText = await response.text().catch(() => '');
+    console.error('OpenAI moderation error:', response.status, errText);
+    return {
+      status: 'pending',
+      reason: `Moderation provider unavailable (HTTP ${response.status}); queued for review`,
+    };
   }
 
   const data = await response.json();
@@ -97,7 +102,12 @@ async function moderateWithSightengine(
   );
 
   if (!response.ok) {
-    return { status: 'pending', reason: 'Moderation provider unavailable; queued for review' };
+    const errText = await response.text().catch(() => '');
+    console.error('Sightengine moderation error:', response.status, errText);
+    return {
+      status: 'pending',
+      reason: `Moderation provider unavailable (HTTP ${response.status}); queued for review`,
+    };
   }
 
   const data = await response.json();
@@ -160,9 +170,20 @@ Deno.serve(async (req) => {
       .select('*')
       .eq('id', puzzleId)
       .eq('author_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !puzzle) {
+    if (fetchError) {
+      console.error('Failed to query puzzles with service_role:', fetchError);
+      return new Response(
+        JSON.stringify({ error: `Database query failed: ${fetchError.message}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    if (!puzzle) {
       return new Response(JSON.stringify({ error: 'Puzzle not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -195,13 +216,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    await adminClient
+    const { error: updateError } = await adminClient
       .from('puzzles')
       .update({
         moderation_status: verdict.status,
         moderation_reason: verdict.reason,
       })
       .eq('id', puzzleId);
+
+    if (updateError) {
+      console.error('Failed to update moderation status:', updateError);
+      return new Response(
+        JSON.stringify({ error: `Status update failed: ${updateError.message}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     // If rejected, immediately delete the offending image from Storage
     if (verdict.status === 'rejected' && puzzle.storage_path) {
