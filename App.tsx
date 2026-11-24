@@ -9,14 +9,16 @@ import { WinScreen } from './src/screens/WinScreen';
 import { ShopScreen } from './src/screens/ShopScreen';
 import { ImageCropperScreen } from './src/screens/ImageCropperScreen';
 import { MarketplaceScreen } from './src/screens/MarketplaceScreen';
+import { registerPwa } from './src/utils/pwa';
 import { COLORS } from './src/theme/tokens';
 
 function TileCraftRoot() {
   const currentScreen = useAppStore((s) => s.currentScreen);
   const hydrateEconomy = useAppStore((s) => s.hydrateEconomy);
 
-  // Hydrate SQLite local wallet immediately, then sync with Supabase cloud profile
+  // Hydrate local wallet & register offline PWA Service Worker on web
   useEffect(() => {
+    registerPwa();
     hydrateEconomy();
   }, [hydrateEconomy]);
 

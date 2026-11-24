@@ -18,7 +18,7 @@ Cross-platform tactile sliding tile puzzle game (`3×3`, `4×4`, `5×5`) with a 
 3. Copy `.env.example` to `.env` and populate `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 4. *(Optional)* Deploy `supabase/functions/moderate-puzzle/index.ts` and configure `OPENAI_API_KEY` or `SIGHTENGINE_USER`/`SIGHTENGINE_SECRET` (or `MODERATION_DEV_AUTO_APPROVE=true` during development).
 
-## Running Locally
+## Running Locally & Deploying as a PWA
 
 ```powershell
 npm.cmd install
@@ -26,4 +26,12 @@ npm.cmd run test:engine
 npx.cmd expo start
 ```
 
-> Note: AdMob (`react-native-google-mobile-ads`) and RevenueCat (`react-native-purchases`) run in safe preview/sandbox mode inside Expo Go and Web, and switch automatically to native SDKs when built with `eas build` / `npx expo run:android` / `npx expo run:ios`.
+### Building & Hosting the Installable PWA (Vercel / Netlify)
+
+```powershell
+npm.cmd run build:pwa
+```
+
+This outputs a complete, offline-capable PWA inside `dist/` (including `manifest.json`, `sw.js`, maskable/Apple PNG icons, and injected PWA `<head>` tags). Both `vercel.json` and `netlify.toml` are preconfigured — connect your GitHub repo to **Vercel** or **Netlify** and it will auto-build and deploy as an installable PWA on HTTPS!
+
+> Note: AdMob (`react-native-google-mobile-ads`) and RevenueCat (`react-native-purchases`) run in safe preview/sandbox mode inside Web/PWA and Expo Go, and switch automatically to native SDKs when built with `eas build` / `npx expo run:android` / `npx expo run:ios`.

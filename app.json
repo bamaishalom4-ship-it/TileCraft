@@ -17,7 +17,15 @@
       }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "TileCraft",
+      "shortName": "TileCraft",
+      "description": "Tactile sliding tile puzzle with custom image cropping and UGC marketplace.",
+      "themeColor": "#0F131D",
+      "backgroundColor": "#0F131D",
+      "display": "standalone",
+      "orientation": "portrait",
+      "favicon": "./public/favicon.png"
     },
     "plugins": [
       [

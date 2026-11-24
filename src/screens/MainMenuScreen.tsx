@@ -15,6 +15,7 @@ import { useAppStore } from '../store/useAppStore';
 import { pickImageFromGallery } from '../services/imageService';
 import { CoinBadge } from '../components/CoinBadge';
 import { DailyRewardModal } from '../components/DailyRewardModal';
+import { InstallPwaBanner } from '../components/InstallPwaBanner';
 import { evaluateDailyStreak } from '../utils/economyUtils';
 import { COLORS, FRAME_THEMES } from '../theme/tokens';
 
@@ -164,6 +165,9 @@ export const MainMenuScreen: React.FC = () => {
 
         <CoinBadge coins={coins} onPress={() => navigate('shop')} />
       </View>
+
+      {/* Installable PWA Banner (Web browser tabs only) */}
+      <InstallPwaBanner />
 
       {/* Daily Streak Banner (glows when today's reward is ready) */}
       {streakStatus.canClaimToday ? (
