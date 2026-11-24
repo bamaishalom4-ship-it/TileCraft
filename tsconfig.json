@@ -2,6 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "module": "esnext",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "baseUrl": ".",
@@ -10,5 +11,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "supabase"]
 }
