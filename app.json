@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "TileCraft",
+    "slug": "tilecraft",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tilecraft.puzzle"
+    },
+    "android": {
+      "package": "com.tilecraft.puzzle",
+      "adaptiveIcon": {
+        "backgroundColor": "#141824"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

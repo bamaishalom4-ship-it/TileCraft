@@ -1,0 +1,287 @@
+import React, { useEffect, useRef } from 'react';
+import {
+  Animated,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import type { GridSize, MoveDirection } from '../types/puzzle';
+import { getTileTargetPosition, indexToPosition } from '../engine/puzzleEngine';
+import { COLORS } from '../theme/tokens';
+
+interface PuzzleTileProps {
+  tileValue: number;
+  currentIndex: number;
+  gridSize: GridSize;
+  cellSize: number;
+  tileGap: number;
+  boardInnerSize: number;
+  isHinted: boolean;
+  hintDirection: MoveDirection | null;
+  isSolvedBoard: boolean;
+  imageUri: string | null;
+  showTileNumbers: boolean;
+  onPress: (currentIndex: number) => void;
+}
+
+const DIRECTION_ARROWS: Record<MoveDirection, string> = {
+  up: '↑',
+  down: '↓',
+  left: '←',
+  right: '→',
+};
+
+/**
+ * Individual tactile sliding tile.
+ * Keyed by `tileValue` (1..N*N-1) so its Animated transform smoothly springs
+ * to its new (row, col) slot whenever the board state updates.
+ *
+ * Also supports rendering a cropped 1/N × 1/N viewport of a custom square image
+ * (ready for Phase 2 gallery picker & UGC marketplace puzzles).
+ */
+export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
+  ({
+    tileValue,
+    currentIndex,
+    gridSize,
+    cellSize,
+    tileGap,
+    boardInnerSize,
+    isHinted,
+    hintDirection,
+    isSolvedBoard,
+    imageUri,
+    showTileNumbers,
+    onPress,
+  }) => {
+    const { row, col } = indexToPosition(currentIndex, gridSize);
+    const targetX = col * cellSize;
+    const targetY = row * cellSize;
+
+    const translateX = useRef(new Animated.Value(targetX)).current;
+    const translateY = useRef(new Animated.Value(targetY)).current;
+    const hintPulse = useRef(new Animated.Value(1)).current;
+    const isFirstMount = useRef(true);
+
+    // Smoothly spring tile to its new slot whenever index or layout size changes
+    useEffect(() => {
+      if (isFirstMount.current) {
+        isFirstMount.current = false;
+        translateX.setValue(targetX);
+        translateY.setValue(targetY);
+        return;
+      }
+
+      Animated.parallel([
+        Animated.spring(translateX, {
+          toValue: targetX,
+          tension: 230,
+          friction: 22,
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: targetY,
+          tension: 230,
+          friction: 22,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [targetX, targetY, translateX, translateY]);
+
+    // Subtle breathing animation when this tile is highlighted by a Hint
+    useEffect(() => {
+      if (!isHinted) {
+        hintPulse.setValue(1);
+        return;
+      }
+
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(hintPulse, {
+            toValue: 0.94,
+            duration: 380,
+            useNativeDriver: true,
+          }),
+          Animated.timing(hintPulse, {
+            toValue: 1,
+            duration: 380,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }, [isHinted, hintPulse]);
+
+    const tileRenderSize = cellSize - tileGap;
+    const isInCorrectSlot = currentIndex === tileValue - 1;
+    const targetPos = getTileTargetPosition(tileValue, gridSize);
+    const fontSize = gridSize === 3 ? 34 : gridSize === 4 ? 26 : 20;
+
+    return (
+      <Animated.View
+        style={[
+          styles.tileWrapper,
+          {
+            width: cellSize,
+            height: cellSize,
+            padding: tileGap / 2,
+            transform: [
+              { translateX },
+              { translateY },
+              { scale: hintPulse },
+            ],
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => onPress(currentIndex)}
+          accessibilityRole="button"
+          accessibilityLabel={`Tile ${tileValue}`}
+          style={({ pressed }) => [
+            styles.tileFace,
+            {
+              width: tileRenderSize,
+              height: tileRenderSize,
+              borderRadius: gridSize === 5 ? 7 : 10,
+              backgroundColor: isHinted
+                ? COLORS.tileHintBg
+                : isInCorrectSlot && !imageUri
+                ? COLORS.tileCorrectBg
+                : COLORS.tileFace,
+              borderColor: isHinted
+                ? COLORS.tileHintBorder
+                : isSolvedBoard
+                ? COLORS.tileCorrectBorder
+                : COLORS.tileShadow,
+              borderWidth: isHinted ? 2.5 : 1.5,
+              opacity: pressed ? 0.92 : 1,
+            },
+          ]}
+        >
+          {/* Specular top-left bevel highlight mimicking molded ivory plastic tiles */}
+          <View style={styles.bevelHighlight} pointerEvents="none" />
+
+          {/* Phase 2+ Custom/UGC Square Image Slice */}
+          {imageUri ? (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Image
+                source={{ uri: imageUri }}
+                resizeMode="cover"
+                style={{
+                  width: boardInnerSize,
+                  height: boardInnerSize,
+                  transform: [
+                    { translateX: -targetPos.col * cellSize },
+                    { translateY: -targetPos.row * cellSize },
+                  ],
+                }}
+              />
+            </View>
+          ) : null}
+
+          {/* Number label (always visible in classic mode; optional badge in photo mode) */}
+          {(!imageUri || showTileNumbers) && (
+            <View style={imageUri ? styles.photoBadge : undefined}>
+              <Text
+                style={[
+                  styles.tileNumber,
+                  {
+                    fontSize: imageUri ? 12 : fontSize,
+                    color: imageUri ? COLORS.textPrimary : COLORS.tileText,
+                  },
+                ]}
+              >
+                {tileValue}
+              </Text>
+            </View>
+          )}
+
+          {/* Subtle green indicator dot when tile is resting in its solved slot */}
+          {isInCorrectSlot && !isHinted && !imageUri && (
+            <View style={styles.correctDot} />
+          )}
+
+          {/* Directional hint badge */}
+          {isHinted && hintDirection && (
+            <View style={styles.hintArrowBadge}>
+              <Text style={styles.hintArrowText}>
+                {DIRECTION_ARROWS[hintDirection]}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+      </Animated.View>
+    );
+  }
+);
+
+PuzzleTile.displayName = 'PuzzleTile';
+
+const styles = StyleSheet.create({
+  tileWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  tileFace: {
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  bevelHighlight: {
+    position: 'absolute',
+    top: 1,
+    left: 1,
+    right: 1,
+    height: '40%',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+  },
+  tileNumber: {
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  photoBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(15, 19, 29, 0.72)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  correctDot: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.success,
+  },
+  hintArrowBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: COLORS.gold,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hintArrowText: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+});
