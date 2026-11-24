@@ -19,6 +19,22 @@ import {
   watchRewardedAdForCoins,
 } from '../services/economyService';
 import { saveLocalWallet } from '../services/localWalletDb';
+import {
+  deleteCraftedPuzzle,
+  loadCraftedPuzzleById,
+  loadCraftedPuzzles,
+  saveCraftedPuzzle,
+} from '../services/craftedPuzzleDb';
+import {
+  clearActiveGame,
+  loadActiveGame,
+  loadCompletedRunIds,
+  loadOnboardingFlags,
+  markRunCompleted,
+  saveOnboardingFlags,
+  type SavedActiveGame,
+} from '../services/activeGameStorage';
+import { resolveIdempotentWinCoins } from '../utils/activeGameUtils';
 
 export const HINT_COIN_COST = 25;
 
@@ -55,13 +71,15 @@ export const SHOP_UPGRADES: ShopUpgrade[] = [
   {
     id: 'unlock_5x5',
     title: '5×5 Master Grid',
-    description: 'Unlock 24-tile master boards for both classic and custom photo puzzles.',
+    description:
+      'Unlock 24-tile master boards for both classic and custom photo puzzles.',
     coinCost: 150,
   },
   {
     id: 'frame_pack',
     title: 'Retro Arcade Frames',
-    description: 'Unlock Crimson, Sunburst, and Cobalt molded vintage puzzle trays.',
+    description:
+      'Unlock Crimson, Sunburst, and Cobalt molded vintage puzzle trays.',
     coinCost: 100,
   },
 ];
@@ -71,7 +89,7 @@ interface AppStoreState {
   activePuzzleTitle: string;
   isCustomPuzzle: boolean;
 
-  // Economy & Synced Wallet State (SQLite + Supabase)
+  // Hydration & Synced Wallet State
   economyHydrated: boolean;
   syncedWithCloud: boolean;
   coins: number;
@@ -83,20 +101,43 @@ interface AppStoreState {
   rewardedAdsDate: string | null;
   transactions: CoinTransaction[];
 
-  // Local Custom Library & Flow Payloads
+  // Durable Crafted Puzzles & Active Game Save
   customPuzzles: CustomPuzzleItem[];
+  storageWarning: string | null;
+  savedActiveGame: SavedActiveGame | null;
+  completedRunIds: string[];
+
+  // First-Time Onboarding
+  hasCompletedFirstNumberedGame: boolean;
+  freeIntroHintUsed: boolean;
+
+  // Flow Payloads
   pendingCropAsset: PickedImageAsset | null;
   lastWinSummary: WinSummary | null;
 
-  // Navigation
+  // Navigation & Lifecycle
   navigate: (screen: ScreenName) => void;
   openCropperWithAsset: (asset: PickedImageAsset) => void;
   setActivePuzzleMeta: (title: string, isCustom: boolean) => void;
-  addCustomPuzzle: (item: CustomPuzzleItem) => void;
 
-  // Economy Actions (Local SQLite + Supabase RPC Synced)
-  hydrateEconomy: () => Promise<void>;
-  recordWin: (summary: WinSummary) => void;
+  // Durable Crafted Puzzles & Active Game Helpers
+  saveAndAddCraftedPuzzle: (input: {
+    title: string;
+    sourceImageUri: string;
+    preferredGridSize: GridSize;
+  }) => Promise<{ ok: boolean; item?: CustomPuzzleItem; error?: string }>;
+  removeCraftedPuzzle: (id: string) => Promise<void>;
+  refreshSavedActiveGame: () => Promise<SavedActiveGame | null>;
+  clearSavedActiveGame: () => Promise<void>;
+  resolveImageForSavedGame: (saved: SavedActiveGame) => Promise<string | null>;
+
+  // Onboarding
+  consumeFreeIntroHint: () => Promise<void>;
+  markFirstNumberedGameCompleted: () => Promise<void>;
+
+  // Economy Actions
+  hydrateApp: () => Promise<void>;
+  recordWin: (summary: WinSummary & { runId: string }) => Promise<void>;
   spendHintCoins: () => Promise<boolean>;
   spendCoins: (amount: number) => boolean;
   setCoinsFromServer: (balance: number) => void;
@@ -132,7 +173,7 @@ function toWalletSnapshot(s: AppStoreState): LocalWalletSnapshot {
 
 export const useAppStore = create<AppStoreState>((set, get) => ({
   currentScreen: 'menu',
-  activePuzzleTitle: 'Classic 15-Puzzle',
+  activePuzzleTitle: 'Classic 4×4',
   isCustomPuzzle: false,
 
   economyHydrated: false,
@@ -147,10 +188,24 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   transactions: [],
 
   customPuzzles: [],
+  storageWarning: null,
+  savedActiveGame: null,
+  completedRunIds: [],
+
+  hasCompletedFirstNumberedGame: false,
+  freeIntroHintUsed: false,
+
   pendingCropAsset: null,
   lastWinSummary: null,
 
-  navigate: (currentScreen) => set({ currentScreen }),
+  navigate: (currentScreen) => {
+    set({ currentScreen });
+    if (currentScreen === 'menu') {
+      loadActiveGame()
+        .then((saved) => set({ savedActiveGame: saved }))
+        .catch(() => {});
+    }
+  },
 
   openCropperWithAsset: (asset) =>
     set({
@@ -161,54 +216,180 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   setActivePuzzleMeta: (activePuzzleTitle, isCustomPuzzle) =>
     set({ activePuzzleTitle, isCustomPuzzle }),
 
-  addCustomPuzzle: (item) =>
-    set((state) => ({
-      customPuzzles: [item, ...state.customPuzzles],
-      pendingCropAsset: null,
-    })),
+  saveAndAddCraftedPuzzle: async ({ title, sourceImageUri, preferredGridSize }) => {
+    const id = `crafted_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const createdAt = new Date().toISOString();
 
-  hydrateEconomy: async () => {
-    const res = await hydrateAndSyncEconomy();
+    const res = await saveCraftedPuzzle({
+      id,
+      title,
+      sourceImageUri,
+      preferredGridSize,
+      createdAt,
+      isLocalUpload: true,
+    });
+
+    if (!res.ok || !res.item) {
+      return {
+        ok: false,
+        error:
+          res.error ??
+          'Could not save your photo puzzle to device storage. Please check available browser storage.',
+      };
+    }
+
+    set((state) => ({
+      customPuzzles: [res.item!, ...state.customPuzzles],
+      pendingCropAsset: null,
+      storageWarning: null,
+    }));
+
+    return { ok: true, item: res.item };
+  },
+
+  removeCraftedPuzzle: async (id) => {
+    await deleteCraftedPuzzle(id);
+    set((state) => ({
+      customPuzzles: state.customPuzzles.filter((p) => p.id !== id),
+    }));
+  },
+
+  refreshSavedActiveGame: async () => {
+    const saved = await loadActiveGame();
+    set({ savedActiveGame: saved });
+    return saved;
+  },
+
+  clearSavedActiveGame: async () => {
+    await clearActiveGame();
+    set({ savedActiveGame: null });
+  },
+
+  resolveImageForSavedGame: async (saved) => {
+    if (saved.mode === 'classic') return null;
+    if (saved.mode === 'marketplace') return saved.remoteImageUrl;
+    if (saved.craftedPuzzleId) {
+      const inMem = get().customPuzzles.find(
+        (p) => p.id === saved.craftedPuzzleId
+      );
+      if (inMem) return inMem.imageUri;
+      const fromDb = await loadCraftedPuzzleById(saved.craftedPuzzleId);
+      if (fromDb) {
+        set((state) => ({
+          customPuzzles: [
+            fromDb,
+            ...state.customPuzzles.filter((p) => p.id !== fromDb.id),
+          ],
+        }));
+        return fromDb.imageUri;
+      }
+    }
+    return null;
+  },
+
+  consumeFreeIntroHint: async () => {
+    const nextFlags = {
+      hasCompletedFirstNumberedGame: get().hasCompletedFirstNumberedGame,
+      freeIntroHintUsed: true,
+    };
+    set({ freeIntroHintUsed: true });
+    await saveOnboardingFlags(nextFlags);
+  },
+
+  markFirstNumberedGameCompleted: async () => {
+    if (get().hasCompletedFirstNumberedGame) return;
+    const nextFlags = {
+      hasCompletedFirstNumberedGame: true,
+      freeIntroHintUsed: get().freeIntroHintUsed,
+    };
+    set({ hasCompletedFirstNumberedGame: true });
+    await saveOnboardingFlags(nextFlags);
+  },
+
+  hydrateApp: async () => {
+    const [economyRes, craftedRes, savedGame, completedRuns, onboarding] =
+      await Promise.all([
+        hydrateAndSyncEconomy(),
+        loadCraftedPuzzles(),
+        loadActiveGame(),
+        loadCompletedRunIds(),
+        loadOnboardingFlags(),
+      ]);
+
     set({
       economyHydrated: true,
-      syncedWithCloud: res.syncedWithCloud,
-      coins: res.wallet.coins,
-      unlockedGridSizes: res.wallet.unlockedGridSizes,
-      unlockedAllFrames: res.wallet.unlockedAllFrames,
-      dailyStreak: res.wallet.dailyStreak,
-      lastDailyClaimDate: res.wallet.lastDailyClaimDate,
-      rewardedAdsWatchedToday: res.wallet.rewardedAdsWatchedToday,
-      rewardedAdsDate: res.wallet.rewardedAdsDate,
-      transactions: res.transactions,
+      syncedWithCloud: economyRes.syncedWithCloud,
+      coins: economyRes.wallet.coins,
+      unlockedGridSizes: economyRes.wallet.unlockedGridSizes,
+      unlockedAllFrames: economyRes.wallet.unlockedAllFrames,
+      dailyStreak: economyRes.wallet.dailyStreak,
+      lastDailyClaimDate: economyRes.wallet.lastDailyClaimDate,
+      rewardedAdsWatchedToday: economyRes.wallet.rewardedAdsWatchedToday,
+      rewardedAdsDate: economyRes.wallet.rewardedAdsDate,
+      transactions: economyRes.transactions,
+      customPuzzles: craftedRes.items,
+      storageWarning: craftedRes.ok ? null : (craftedRes.error ?? null),
+      savedActiveGame: savedGame,
+      completedRunIds: completedRuns,
+      hasCompletedFirstNumberedGame: onboarding.hasCompletedFirstNumberedGame,
+      freeIntroHintUsed: onboarding.freeIntroHintUsed,
     });
   },
 
-  recordWin: (summary) => {
-    const snapshot = toWalletSnapshot(get());
-    // Optimistically navigate to Win Screen immediately for snappy feel
-    set((state) => ({
-      lastWinSummary: summary,
-      coins: state.coins + summary.coinsEarned,
-      currentScreen: 'win',
-    }));
+  recordWin: async (summary) => {
+    const state = get();
+    await clearActiveGame();
 
-    // Persist to SQLite & reconcile with Supabase win reward RPC in background
-    creditPuzzleWinSynced(
-      snapshot,
-      summary.gridSize,
-      summary.stars,
-      summary.coinsEarned
-    )
-      .then(({ wallet, tx }) => {
-        set((state) => ({
+    // Idempotency guard: never award completion coins twice for the same runId
+    const { coinsToGrant, alreadyRewarded, updatedCompletedRunIds } =
+      resolveIdempotentWinCoins(
+        summary.runId,
+        state.completedRunIds,
+        summary.coinsEarned
+      );
+
+    if (!alreadyRewarded) {
+      await markRunCompleted(summary.runId);
+    }
+
+    if (!summary.isCustomPuzzle) {
+      await get().markFirstNumberedGameCompleted();
+    }
+
+    const snapshot = toWalletSnapshot(get());
+
+    set({
+      savedActiveGame: null,
+      completedRunIds: updatedCompletedRunIds,
+      lastWinSummary: {
+        ...summary,
+        coinsEarned: coinsToGrant,
+      },
+      coins: state.coins + coinsToGrant,
+      currentScreen: 'win',
+    });
+
+    if (!alreadyRewarded && coinsToGrant > 0) {
+      try {
+        const { wallet, tx } = await creditPuzzleWinSynced(
+          snapshot,
+          summary.gridSize,
+          summary.stars,
+          coinsToGrant,
+          summary.runId
+        );
+        set((s) => ({
           coins: wallet.coins,
-          transactions: [tx, ...state.transactions].slice(0, 30),
+          transactions: [tx, ...s.transactions].slice(0, 30),
         }));
-      })
-      .catch(() => {});
+      } catch {
+        // Optimistic local state already saved
+      }
+    }
   },
 
   spendHintCoins: async () => {
+    if (!get().economyHydrated) return false;
     const snapshot = toWalletSnapshot(get());
     const res = await spendCoinsForHint(snapshot, HINT_COIN_COST);
     if (!res.ok) return false;
@@ -224,7 +405,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
 
   spendCoins: (amount) => {
     const state = get();
-    if (state.coins < amount) return false;
+    if (!state.economyHydrated || state.coins < amount) return false;
     const nextCoins = state.coins - amount;
     set({ coins: nextCoins });
     saveLocalWallet({ ...toWalletSnapshot(state), coins: nextCoins }).catch(() => {});
@@ -232,6 +413,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   setCoinsFromServer: (balance) => {
+    if (!get().economyHydrated) return;
     const safeBalance = Math.max(0, Math.floor(balance));
     const state = get();
     set({ coins: safeBalance });
@@ -239,6 +421,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   claimDailyReward: async () => {
+    if (!get().economyHydrated) {
+      return { ok: false, coinsAwarded: 0, error: 'Loading wallet...' };
+    }
     const res = await claimDailyLoginReward(toWalletSnapshot(get()));
     set((state) => ({
       coins: res.wallet.coins,
@@ -252,6 +437,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   watchRewardedAd: async () => {
+    if (!get().economyHydrated) {
+      return { ok: false, coinsAwarded: 0, error: 'Loading wallet...' };
+    }
     const res = await watchRewardedAdForCoins(toWalletSnapshot(get()));
     if (res.ok) {
       set((state) => ({
@@ -272,6 +460,7 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   buyUpgrade: async (upgradeId) => {
+    if (!get().economyHydrated) return { ok: false, error: 'Loading wallet...' };
     const upgrade = SHOP_UPGRADES.find((u) => u.id === upgradeId);
     if (!upgrade) return { ok: false, error: 'Unknown upgrade' };
 
@@ -290,6 +479,9 @@ export const useAppStore = create<AppStoreState>((set, get) => ({
   },
 
   buyCoinPack: async (pack) => {
+    if (!get().economyHydrated) {
+      return { ok: false, coinsAwarded: 0, error: 'Loading wallet...' };
+    }
     const res = await buyCoinPackSynced(toWalletSnapshot(get()), pack);
     if (res.ok) {
       set((state) => ({

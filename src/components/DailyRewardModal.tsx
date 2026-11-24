@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +14,7 @@ import {
   evaluateDailyStreak,
 } from '../utils/economyUtils';
 import { useAppStore } from '../store/useAppStore';
+import { showAppDialog } from '../store/useDialogStore';
 import { COLORS } from '../theme/tokens';
 
 interface DailyRewardModalProps {
@@ -22,13 +23,14 @@ interface DailyRewardModalProps {
 }
 
 /**
- * 7-Day Escalating Daily Login Streak Modal (Day 1: 40¢ -> Day 7: 200¢).
+ * 7-Day Escalating Daily Login Streak Modal with Escape dismissal and focus restoration.
  */
 export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
   visible,
   onClose,
 }) => {
   const [claiming, setClaiming] = useState(false);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const dailyStreak = useAppStore((s) => s.dailyStreak);
   const lastDailyClaimDate = useAppStore((s) => s.lastDailyClaimDate);
@@ -36,19 +38,44 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
 
   const status = evaluateDailyStreak(lastDailyClaimDate, dailyStreak);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (visible) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+        }
+      };
+      window.addEventListener('keydown', onKeyDown);
+      return () => window.removeEventListener('keydown', onKeyDown);
+    } else if (previousFocusRef.current) {
+      const el = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (typeof el.focus === 'function' && document.contains(el)) {
+        setTimeout(() => el.focus(), 0);
+      }
+    }
+  }, [visible, onClose]);
+
   const handleClaim = async () => {
     if (claiming || !status.canClaimToday) return;
     setClaiming(true);
     try {
       const res = await claimDailyReward();
       if (res.ok) {
-        Alert.alert(
-          `Day ${status.nextClaimDay} Claimed!`,
-          `+${res.coinsAwarded} coins added to your TileCraft wallet.`,
-          [{ text: 'Nice!', onPress: onClose }]
-        );
+        onClose();
+        showAppDialog({
+          title: `Day ${status.nextClaimDay} Claimed!`,
+          message: `+${res.coinsAwarded} coins added to your TileCraft wallet.`,
+          actions: [{ label: 'Nice!', style: 'primary' }],
+        });
       } else {
-        Alert.alert('Already Claimed', res.error ?? 'Come back tomorrow!');
+        showAppDialog({
+          title: 'Already Claimed',
+          message: res.error ?? 'Come back tomorrow!',
+        });
       }
     } finally {
       setClaiming(false);
@@ -62,29 +89,33 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
+      <View style={styles.backdrop} accessibilityViewIsModal>
         <View style={styles.card}>
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <Ionicons name="flame" size={22} color={COLORS.gold} />
+              <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                <Ionicons name="flame" size={22} color={COLORS.gold} />
+              </View>
               <Text style={styles.title}>Daily Login Streak</Text>
             </View>
-            <Pressable onPress={onClose} style={styles.closeBtn}>
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close daily rewards"
+              style={styles.closeBtn}
+            >
               <Ionicons name="close" size={18} color={COLORS.textPrimary} />
             </Pressable>
           </View>
 
           <Text style={styles.subtitle}>
-            Log in every day to climb the 7-day coin ladder. Day 7 awards a massive 200 ¢ chest!
+            Log in every day to climb the 7-day coin ladder. Day 7 awards a 200 ¢ chest!
           </Text>
 
-          {/* 7-Day Calendar Grid */}
           <View style={styles.daysGrid}>
             {DAILY_REWARD_SCHEDULE.map((coins, idx) => {
               const dayNum = idx + 1;
-              const isCompleted = status.canClaimToday
-                ? dayNum <= status.currentStreak
-                : dayNum <= status.currentStreak;
+              const isCompleted = dayNum <= status.currentStreak;
               const isTodayTarget =
                 status.canClaimToday && dayNum === status.nextClaimDay;
 
@@ -124,6 +155,13 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
           <Pressable
             onPress={handleClaim}
             disabled={!status.canClaimToday || claiming}
+            accessibilityRole="button"
+            accessibilityLabel={
+              status.canClaimToday
+                ? `Claim Day ${status.nextClaimDay} reward of ${status.nextRewardCoins} coins`
+                : 'Daily reward already claimed today'
+            }
+            accessibilityState={{ disabled: !status.canClaimToday || claiming }}
             style={({ pressed }) => [
               styles.claimBtn,
               !status.canClaimToday && styles.claimBtnDisabled,
@@ -133,7 +171,12 @@ export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({
             {claiming ? (
               <ActivityIndicator color="#111827" />
             ) : (
-              <Text style={styles.claimBtnText}>
+              <Text
+                style={[
+                  styles.claimBtnText,
+                  !status.canClaimToday && styles.claimBtnTextDisabled,
+                ]}
+              >
                 {status.canClaimToday
                   ? `Claim Day ${status.nextClaimDay} (+${status.nextRewardCoins} ¢)`
                   : 'Claimed Today — See You Tomorrow!'}
@@ -257,6 +300,9 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 14,
     fontWeight: '900',
+  },
+  claimBtnTextDisabled: {
+    color: COLORS.textSecondary,
   },
   pressed: {
     transform: [{ scale: 0.98 }],

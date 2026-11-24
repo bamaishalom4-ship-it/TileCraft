@@ -229,3 +229,35 @@ export function countCorrectTiles(board: Board): number {
   }
   return correct;
 }
+
+/**
+ * Maps an arrow-key slide direction to the adjacent tile index that will slide
+ * INTO the empty gap in that direction:
+ * - 'up'    -> slides the tile directly BELOW the gap upward
+ * - 'down'  -> slides the tile directly ABOVE the gap downward
+ * - 'left'  -> slides the tile directly RIGHT of the gap leftward
+ * - 'right' -> slides the tile directly LEFT of the gap rightward
+ *
+ * Returns null if no adjacent tile can move in that direction.
+ */
+export function getTileIndexForArrowKey(
+  board: Board,
+  gridSize: GridSize,
+  direction: MoveDirection
+): number | null {
+  const blankIndex = board.indexOf(BLANK_TILE);
+  if (blankIndex === -1) return null;
+
+  const { row, col } = indexToPosition(blankIndex, gridSize);
+
+  switch (direction) {
+    case 'up':
+      return row < gridSize - 1 ? positionToIndex(row + 1, col, gridSize) : null;
+    case 'down':
+      return row > 0 ? positionToIndex(row - 1, col, gridSize) : null;
+    case 'left':
+      return col < gridSize - 1 ? positionToIndex(row, col + 1, gridSize) : null;
+    case 'right':
+      return col > 0 ? positionToIndex(row, col - 1, gridSize) : null;
+  }
+}

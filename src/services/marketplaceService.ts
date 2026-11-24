@@ -9,85 +9,27 @@ import type {
 import type { GridSize } from '../types/puzzle';
 import {
   ensureAuthenticatedUser,
+  getExistingSessionUserId,
   getSupabaseClient,
+  isAnonymousSignInAvailable,
   isSupabaseConfigured,
 } from './supabaseClient';
-import {
-  shouldAutoQuarantine,
-  validatePuzzleTitleSafety,
-} from '../utils/marketplaceUtils';
+import { validatePuzzleTitleSafety } from '../utils/marketplaceUtils';
 
-/**
- * Curated local sandbox puzzles shown only when `.env` is not yet linked to Supabase.
- * Uses clean remote square Unsplash images so you can test the Marketplace UI immediately.
- */
-const SANDBOX_INITIAL_PUZZLES: MarketplacePuzzle[] = [
-  {
-    id: 'demo_retro_arcade',
-    authorId: 'creator_1',
-    authorName: 'PixelMancer',
-    title: 'Neon Arcade Cabinet',
-    category: 'Retro',
-    imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=800&h=800&q=80',
-    storagePath: 'demo/retro.jpg',
-    recommendedGridSize: 4,
-    coinPrice: 25,
-    downloadCount: 342,
-    flagCount: 0,
-    moderationStatus: 'approved',
-    createdAt: '2026-11-20T10:00:00Z',
-  },
-  {
-    id: 'demo_shiba_smile',
-    authorId: 'creator_2',
-    authorName: 'PawStudio',
-    title: 'Golden Shiba Smile',
-    category: 'Pets',
-    imageUrl: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=800&h=800&q=80',
-    storagePath: 'demo/shiba.jpg',
-    recommendedGridSize: 3,
-    coinPrice: 0,
-    downloadCount: 518,
-    flagCount: 0,
-    moderationStatus: 'approved',
-    createdAt: '2026-11-21T14:30:00Z',
-  },
-  {
-    id: 'demo_kyoto_sunset',
-    authorId: 'creator_3',
-    authorName: 'WanderLens',
-    title: 'Kyoto Lantern Alley',
-    category: 'Travel',
-    imageUrl: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&h=800&q=80',
-    storagePath: 'demo/kyoto.jpg',
-    recommendedGridSize: 4,
-    coinPrice: 30,
-    downloadCount: 215,
-    flagCount: 0,
-    moderationStatus: 'approved',
-    createdAt: '2026-11-22T09:15:00Z',
-  },
-  {
-    id: 'demo_alpine_peak',
-    authorId: 'creator_4',
-    authorName: 'AlpineCraft',
-    title: 'Emerald Glacier Lake',
-    category: 'Nature',
-    imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&h=800&q=80',
-    storagePath: 'demo/alpine.jpg',
-    recommendedGridSize: 5,
-    coinPrice: 40,
-    downloadCount: 164,
-    flagCount: 0,
-    moderationStatus: 'approved',
-    createdAt: '2026-11-23T18:00:00Z',
-  },
-];
+export type MarketplaceFeedStatus =
+  | 'ready'
+  | 'empty'
+  | 'offline'
+  | 'backend-error'
+  | 'unconfigured';
 
-// In-memory sandbox state (only active when Supabase .env is not configured)
-let sandboxPuzzles: MarketplacePuzzle[] = [...SANDBOX_INITIAL_PUZZLES];
-const sandboxOwnedIds = new Set<string>(['demo_shiba_smile']);
-const sandboxFlaggedByMe = new Set<string>();
+export interface MarketplaceFetchResult {
+  status: MarketplaceFeedStatus;
+  puzzles: MarketplacePuzzle[];
+  canPublish: boolean;
+  publishDisabledReason?: string;
+  errorMessage?: string;
+}
 
 interface PuzzleRow {
   id: string;
@@ -103,6 +45,10 @@ interface PuzzleRow {
   flag_count: number;
   moderation_status: MarketplacePuzzle['moderationStatus'];
   created_at: string;
+}
+
+function isBrowserOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 function mapPuzzleRow(
@@ -131,55 +77,106 @@ function mapPuzzleRow(
 }
 
 /**
- * Fetches approved UGC puzzles from Supabase (or Local Sandbox Mode when unconfigured).
+ * Fetches approved UGC puzzles from Supabase with distinct offline, unconfigured,
+ * backend-error, empty, and ready states. Never invents fake listings or fires
+ * blind HTTP 422 anonymous signup calls.
  */
-export async function fetchMarketplacePuzzles(): Promise<{
-  puzzles: MarketplacePuzzle[];
-  isLiveBackend: boolean;
-}> {
+export async function fetchMarketplacePuzzles(): Promise<MarketplaceFetchResult> {
+  if (isBrowserOffline()) {
+    return {
+      status: 'offline',
+      puzzles: [],
+      canPublish: false,
+      publishDisabledReason:
+        'You are offline. Reconnect to the internet to browse or publish community puzzles.',
+      errorMessage:
+        'You are currently offline. Classic mode and your saved photo puzzles still work without an internet connection.',
+    };
+  }
+
   if (!isSupabaseConfigured()) {
     return {
-      isLiveBackend: false,
-      puzzles: sandboxPuzzles.map((p) => ({
-        ...p,
-        isOwned: sandboxOwnedIds.has(p.id) || p.authorId === 'local_me',
-      })),
+      status: 'unconfigured',
+      puzzles: [],
+      canPublish: false,
+      publishDisabledReason:
+        'Community publishing is coming soon once the Marketplace backend is connected.',
+      errorMessage:
+        'Community Marketplace is in preview mode. You can play Classic puzzles and craft private photo puzzles on this device.',
     };
   }
 
   const supabase = getSupabaseClient()!;
-  const auth = await ensureAuthenticatedUser();
 
-  const [{ data: puzzleRows, error: puzzlesErr }, { data: downloadRows }] =
-    await Promise.all([
+  try {
+    const [existingUserId, anonAllowed, puzzlesRes] = await Promise.all([
+      getExistingSessionUserId(),
+      isAnonymousSignInAvailable(),
       supabase
         .from('puzzles')
         .select('*')
         .eq('moderation_status', 'approved')
         .order('download_count', { ascending: false })
         .limit(60),
-      auth
-        ? supabase
-            .from('puzzle_downloads')
-            .select('puzzle_id')
-            .eq('user_id', auth.userId)
-        : Promise.resolve({ data: [] as Array<{ puzzle_id: string }> }),
     ]);
 
-  if (puzzlesErr) {
-    throw new Error(puzzlesErr.message);
+    if (puzzlesRes.error) {
+      const msg = puzzlesRes.error.message ?? '';
+      const isPermissionDenied =
+        puzzlesRes.error.code === '42501' ||
+        msg.toLowerCase().includes('permission denied');
+
+      return {
+        status: 'backend-error',
+        puzzles: [],
+        canPublish: false,
+        publishDisabledReason:
+          'Marketplace publishing is temporarily unavailable while server access is being configured.',
+        errorMessage: isPermissionDenied
+          ? 'The community catalog is temporarily unavailable while backend permissions are being finalized. Classic mode and private photo puzzles work normally.'
+          : `Could not reach the community catalog (${msg || 'network error'}). Please try again later.`,
+      };
+    }
+
+    let ownedSet = new Set<string>();
+    if (existingUserId) {
+      const { data: downloadRows } = await supabase
+        .from('puzzle_downloads')
+        .select('puzzle_id')
+        .eq('user_id', existingUserId);
+      ownedSet = new Set(
+        (downloadRows ?? []).map((r: { puzzle_id: string }) => r.puzzle_id)
+      );
+    }
+
+    const mapped = (puzzlesRes.data ?? []).map((row) =>
+      mapPuzzleRow(row as PuzzleRow, ownedSet, existingUserId)
+    );
+
+    const canPublish = Boolean(existingUserId) || anonAllowed;
+    const publishDisabledReason = canPublish
+      ? undefined
+      : 'Public publishing requires player sign-in to be enabled on the backend. Private photo puzzles stay saved on your device.';
+
+    return {
+      status: mapped.length > 0 ? 'ready' : 'empty',
+      puzzles: mapped,
+      canPublish,
+      publishDisabledReason,
+    };
+  } catch (err) {
+    return {
+      status: isBrowserOffline() ? 'offline' : 'backend-error',
+      puzzles: [],
+      canPublish: false,
+      publishDisabledReason:
+        'Could not connect to the Marketplace right now. Please try again later.',
+      errorMessage:
+        err instanceof Error
+          ? err.message
+          : 'Unable to load the community catalog right now.',
+    };
   }
-
-  const ownedSet = new Set(
-    (downloadRows ?? []).map((r: { puzzle_id: string }) => r.puzzle_id)
-  );
-
-  return {
-    isLiveBackend: true,
-    puzzles: (puzzleRows ?? []).map((row) =>
-      mapPuzzleRow(row as PuzzleRow, ownedSet, auth?.userId ?? null)
-    ),
-  };
 }
 
 /**
@@ -190,6 +187,14 @@ export async function fetchMarketplacePuzzles(): Promise<{
 export async function publishPuzzleToMarketplace(
   payload: PublishPuzzlePayload
 ): Promise<PublishPuzzleResult> {
+  if (isBrowserOffline()) {
+    return {
+      ok: false,
+      message:
+        'You are offline. Connect to the internet to publish to the Marketplace.',
+    };
+  }
+
   const titleCheck = validatePuzzleTitleSafety(payload.title);
   if (!titleCheck.valid) {
     return {
@@ -199,41 +204,26 @@ export async function publishPuzzleToMarketplace(
     };
   }
 
-  // Local Sandbox Preview fallback
   if (!isSupabaseConfigured()) {
-    const created: MarketplacePuzzle = {
-      id: `local_ugc_${Date.now()}`,
-      authorId: 'local_me',
-      authorName: 'You (Sandbox)',
-      title: payload.title.trim(),
-      category: payload.category,
-      imageUrl: payload.localImageUri,
-      storagePath: `local/${Date.now()}.jpg`,
-      recommendedGridSize: payload.recommendedGridSize,
-      coinPrice: payload.coinPrice,
-      downloadCount: 0,
-      flagCount: 0,
-      moderationStatus: 'approved',
-      createdAt: new Date().toISOString(),
-      isOwned: true,
-    };
-    sandboxPuzzles = [created, ...sandboxPuzzles];
-    sandboxOwnedIds.add(created.id);
     return {
-      ok: true,
-      puzzle: created,
-      moderationStatus: 'approved',
-      message: 'Published to Local Sandbox Marketplace! Add your Supabase .env keys to publish globally.',
+      ok: false,
+      message:
+        'Marketplace publishing is not enabled in this build yet. Your photo remains saved privately on this device.',
     };
   }
 
   const supabase = getSupabaseClient()!;
   const auth = await ensureAuthenticatedUser();
-  if (!auth) {
-    return { ok: false, message: 'Sign-in failed. Please try again.' };
+  if (!auth.ok || !auth.userId || !auth.username) {
+    return {
+      ok: false,
+      message:
+        auth.message ??
+        'A valid cloud session is required to publish puzzles publicly.',
+    };
   }
 
-  // 1. Read local cropped JPEG as ArrayBuffer for React Native-safe Storage upload
+  // 1. Read local cropped JPEG as ArrayBuffer for cross-platform Storage upload
   const fileResponse = await fetch(payload.localImageUri);
   const arrayBuffer = await fileResponse.arrayBuffer();
   const storagePath = `${auth.userId}/${Date.now()}.jpg`;
@@ -271,7 +261,6 @@ export async function publishPuzzleToMarketplace(
     .single();
 
   if (insertError || !inserted) {
-    // Clean up orphaned storage file if DB insert failed
     await supabase.storage.from('puzzle-images').remove([storagePath]);
     return {
       ok: false,
@@ -303,7 +292,7 @@ export async function publishPuzzleToMarketplace(
       moderationStatus: 'rejected',
       message:
         modResult?.reason ??
-        'This image did not pass automated NSFW safety screening and was removed.',
+        'This image did not pass automated safety screening and was removed.',
     };
   }
 
@@ -326,44 +315,36 @@ export async function publishPuzzleToMarketplace(
 }
 
 /**
- * Unlocks/downloads a marketplace puzzle using an atomic PostgreSQL RPC
- * (deducts coins, credits creator royalty, records ownership, increments downloads).
+ * Unlocks/downloads a marketplace puzzle using an atomic PostgreSQL RPC.
  */
 export async function downloadMarketplacePuzzle(
   puzzle: MarketplacePuzzle,
-  localSpendCoins: (amount: number) => boolean,
   currentLocalBalance: number
 ): Promise<DownloadPuzzleResult> {
-  // Local Sandbox Preview fallback
-  if (!isSupabaseConfigured()) {
-    if (sandboxOwnedIds.has(puzzle.id) || puzzle.authorId === 'local_me') {
-      return {
-        ok: true,
-        alreadyOwned: true,
-        coinsCharged: 0,
-        newBalance: currentLocalBalance,
-      };
-    }
-
-    if (puzzle.coinPrice > 0 && !localSpendCoins(puzzle.coinPrice)) {
-      return { ok: false, error: 'Not enough coins' };
-    }
-
-    sandboxOwnedIds.add(puzzle.id);
-    sandboxPuzzles = sandboxPuzzles.map((p) =>
-      p.id === puzzle.id ? { ...p, downloadCount: p.downloadCount + 1 } : p
-    );
-
+  if (isBrowserOffline()) {
     return {
-      ok: true,
-      alreadyOwned: false,
-      coinsCharged: puzzle.coinPrice,
-      newBalance: currentLocalBalance - puzzle.coinPrice,
+      ok: false,
+      error: 'Connect to the internet to download Marketplace puzzles.',
+    };
+  }
+
+  if (!isSupabaseConfigured()) {
+    return {
+      ok: false,
+      error: 'Marketplace backend is not configured.',
     };
   }
 
   const supabase = getSupabaseClient()!;
-  await ensureAuthenticatedUser();
+  const auth = await ensureAuthenticatedUser();
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error:
+        auth.message ??
+        'Sign-in is required to download puzzles from the Marketplace.',
+    };
+  }
 
   const { data, error } = await supabase.rpc('purchase_marketplace_puzzle', {
     p_puzzle_id: puzzle.id,
@@ -394,35 +375,24 @@ export async function flagMarketplacePuzzle(
   reason: FlagReason,
   details?: string
 ): Promise<FlagPuzzleResult> {
-  if (!isSupabaseConfigured()) {
-    if (sandboxFlaggedByMe.has(puzzleId)) {
-      return { ok: false, message: 'You have already reported this puzzle.' };
-    }
-    sandboxFlaggedByMe.add(puzzleId);
-    let quarantined = false;
-    sandboxPuzzles = sandboxPuzzles.map((p) => {
-      if (p.id !== puzzleId) return p;
-      const nextCount = p.flagCount + 1;
-      quarantined = shouldAutoQuarantine(nextCount);
-      return {
-        ...p,
-        flagCount: nextCount,
-        moderationStatus: quarantined ? 'flagged' : p.moderationStatus,
-      };
-    });
+  if (isBrowserOffline()) {
     return {
-      ok: true,
-      quarantined,
-      message: quarantined
-        ? 'Puzzle quarantined and hidden pending review.'
-        : 'Report submitted. Thank you for keeping TileCraft safe!',
+      ok: false,
+      message: 'Connect to the internet to submit a report.',
     };
+  }
+
+  if (!isSupabaseConfigured()) {
+    return { ok: false, message: 'Marketplace backend is not configured.' };
   }
 
   const supabase = getSupabaseClient()!;
   const auth = await ensureAuthenticatedUser();
-  if (!auth) {
-    return { ok: false, message: 'Sign-in required to report puzzles.' };
+  if (!auth.ok || !auth.userId) {
+    return {
+      ok: false,
+      message: auth.message ?? 'Sign-in is required to report puzzles.',
+    };
   }
 
   const { error } = await supabase.from('puzzle_flags').insert({

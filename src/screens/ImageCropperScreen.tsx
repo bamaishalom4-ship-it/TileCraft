@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   PanResponder,
   Pressable,
@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { GridSize } from '../types/puzzle';
 import { useAppStore } from '../store/useAppStore';
 import { usePuzzleStore } from '../store/usePuzzleStore';
+import { showAppDialog } from '../store/useDialogStore';
 import {
   clampCropOffsets,
   computeSquareCropRegion,
@@ -29,27 +29,28 @@ const ZOOM_STEP = 0.25;
 
 /**
  * Interactive 1:1 Square Image Cropper & Grid Cut-Line Previewer:
- * - Drag (pan) the photo inside the square crop viewport
- * - Zoom in/out (1.0x – 3.0x) and rotate in 90° increments
- * - Toggle live 3×3 / 4×4 / 5×5 cut lines to see exact tile boundaries before playing
- * - Crops & normalizes output to 1024×1024 JPEG via `expo-image-manipulator`
+ * - Sized responsively for 320×568, 375×667, and desktop so "Crop & Play" is always reachable
+ * - Persists cropped photo durably in IndexedDB (web) / DocumentDirectory (native)
+ * - Clearly informs the player that their photo stays private on this device
  */
 export const ImageCropperScreen: React.FC = () => {
-  const { width: screenWidth } = useWindowDimensions();
-  const viewportSize = Math.min(screenWidth - 40, 340);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  // Fit comfortably alongside controls even on 375×667 and 320×568 viewports
+  const viewportSize = Math.max(
+    180,
+    Math.min(screenWidth - 44, Math.floor(screenHeight * 0.36), 300)
+  );
 
   const asset = useAppStore((s) => s.pendingCropAsset);
   const unlockedGridSizes = useAppStore((s) => s.unlockedGridSizes);
   const navigate = useAppStore((s) => s.navigate);
-  const addCustomPuzzle = useAppStore((s) => s.addCustomPuzzle);
+  const saveAndAddCraftedPuzzle = useAppStore((s) => s.saveAndAddCraftedPuzzle);
   const setActivePuzzleMeta = useAppStore((s) => s.setActivePuzzleMeta);
 
-  const setGridSize = usePuzzleStore((s) => s.setGridSize);
-  const setImageUri = usePuzzleStore((s) => s.setImageUri);
-  const shuffle = usePuzzleStore((s) => s.shuffle);
+  const startNewGame = usePuzzleStore((s) => s.startNewGame);
 
   const [title, setTitle] = useState('My Custom Puzzle');
-  const [selectedGrid, setSelectedGrid] = useState<GridSize>(4);
+  const [selectedGrid, setSelectedGrid] = useState<GridSize>(3);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -154,25 +155,36 @@ export const ImageCropperScreen: React.FC = () => {
       );
 
       const cleanTitle = title.trim() || 'Custom Puzzle';
-      addCustomPuzzle({
-        id: `local_${Date.now()}`,
+      const saved = await saveAndAddCraftedPuzzle({
         title: cleanTitle,
-        imageUri: croppedUri,
+        sourceImageUri: croppedUri,
         preferredGridSize: selectedGrid,
-        createdAt: new Date().toISOString(),
-        isLocalUpload: true,
       });
 
-      setGridSize(selectedGrid);
-      setImageUri(croppedUri);
-      shuffle();
-      setActivePuzzleMeta(cleanTitle, true);
+      if (!saved.ok || !saved.item) {
+        showAppDialog({
+          title: 'Could Not Save Photo Puzzle',
+          message:
+            saved.error ??
+            'Local storage is unavailable or full, so this photo could not be saved permanently.',
+        });
+        return;
+      }
+
+      startNewGame({
+        gridSize: selectedGrid,
+        mode: 'photo',
+        title: saved.item.title,
+        imageUri: saved.item.imageUri,
+        craftedPuzzleId: saved.item.id,
+      });
+      setActivePuzzleMeta(saved.item.title, true);
       navigate('game');
     } catch {
-      Alert.alert(
-        'Crop Failed',
-        'Could not process this image. Please try another photo.'
-      );
+      showAppDialog({
+        title: 'Crop Failed',
+        message: 'Could not process this image. Please try another photo.',
+      });
     } finally {
       setProcessing(false);
     }
@@ -181,193 +193,243 @@ export const ImageCropperScreen: React.FC = () => {
   const gridLines = Array.from({ length: selectedGrid - 1 }, (_, i) => i + 1);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.root}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <Pressable onPress={() => navigate('menu')} style={styles.iconBtn}>
-          <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+        <Pressable
+          onPress={() => navigate('menu')}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel photo cropper"
+          style={styles.iconBtn}
+        >
+          <Ionicons name="close" size={20} color={COLORS.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>Crop 1:1 Puzzle</Text>
-        <Pressable onPress={handleResetCrop} style={styles.resetPill}>
+        <Text style={styles.headerTitle}>Crop Photo Puzzle</Text>
+        <Pressable
+          onPress={handleResetCrop}
+          accessibilityRole="button"
+          accessibilityLabel="Reset crop position and zoom"
+          style={styles.resetPill}
+        >
           <Text style={styles.resetText}>Reset</Text>
         </Pressable>
       </View>
 
-      {/* Interactive Square Viewport with Live Tile Grid Overlay */}
-      <View
-        style={[
-          styles.cropViewport,
-          { width: viewportSize, height: viewportSize },
-        ]}
-        {...panResponder.panHandlers}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <Image
-          source={{ uri: asset.uri }}
-          resizeMode="cover"
-          style={{
-            width: layout.renderedWidth,
-            height: layout.renderedHeight,
-            transform: [
-              { translateX: layout.offsetX },
-              { translateY: layout.offsetY },
-              { rotate: `${rotation}deg` },
-            ],
-          }}
-        />
+        {/* Interactive Square Viewport with Live Tile Grid Overlay */}
+        <View
+          style={[
+            styles.cropViewport,
+            { width: viewportSize, height: viewportSize },
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <Image
+            source={{ uri: asset.uri }}
+            resizeMode="cover"
+            style={{
+              width: layout.renderedWidth,
+              height: layout.renderedHeight,
+              transform: [
+                { translateX: layout.offsetX },
+                { translateY: layout.offsetY },
+                { rotate: `${rotation}deg` },
+              ],
+            }}
+          />
 
-        {/* Non-interactive Grid Cut Lines Overlay */}
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {gridLines.map((line) => (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {gridLines.map((line) => (
+              <View
+                key={`v-${line}`}
+                style={[
+                  styles.verticalLine,
+                  { left: `${(line / selectedGrid) * 100}%` },
+                ]}
+              />
+            ))}
+            {gridLines.map((line) => (
+              <View
+                key={`h-${line}`}
+                style={[
+                  styles.horizontalLine,
+                  { top: `${(line / selectedGrid) * 100}%` },
+                ]}
+              />
+            ))}
             <View
-              key={`v-${line}`}
               style={[
-                styles.verticalLine,
-                { left: `${(line / selectedGrid) * 100}%` },
+                styles.blankPreview,
+                {
+                  width: `${100 / selectedGrid}%`,
+                  height: `${100 / selectedGrid}%`,
+                },
               ]}
-            />
-          ))}
-          {gridLines.map((line) => (
-            <View
-              key={`h-${line}`}
-              style={[
-                styles.horizontalLine,
-                { top: `${(line / selectedGrid) * 100}%` },
-              ]}
-            />
-          ))}
-          {/* Bottom-right cavity preview badge */}
-          <View
-            style={[
-              styles.blankPreview,
-              {
-                width: `${100 / selectedGrid}%`,
-                height: `${100 / selectedGrid}%`,
-              },
-            ]}
-          >
-            <Text style={styles.blankPreviewText}>OPEN</Text>
+            >
+              <Text style={styles.blankPreviewText}>GAP</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <Text style={styles.dragTip}>Drag photo to position · Use controls to zoom</Text>
+        {/* Zoom & Rotate Controls */}
+        <View style={styles.toolsRow}>
+          <Pressable
+            onPress={() => adjustZoom(-ZOOM_STEP)}
+            disabled={zoom <= ZOOM_MIN}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom out"
+            accessibilityState={{ disabled: zoom <= ZOOM_MIN }}
+            style={[styles.toolBtn, zoom <= ZOOM_MIN && styles.toolDisabled]}
+          >
+            <Ionicons name="remove" size={18} color={COLORS.textPrimary} />
+          </Pressable>
 
-      {/* Zoom & Rotate Controls */}
-      <View style={styles.toolsRow}>
-        <Pressable
-          onPress={() => adjustZoom(-ZOOM_STEP)}
-          disabled={zoom <= ZOOM_MIN}
-          style={[styles.toolBtn, zoom <= ZOOM_MIN && styles.toolDisabled]}
-        >
-          <Ionicons name="remove" size={20} color={COLORS.textPrimary} />
-        </Pressable>
+          <View style={styles.zoomReadout}>
+            <Text style={styles.zoomText}>{zoom.toFixed(2)}×</Text>
+          </View>
 
-        <View style={styles.zoomReadout}>
-          <Text style={styles.zoomText}>{zoom.toFixed(2)}×</Text>
+          <Pressable
+            onPress={() => adjustZoom(ZOOM_STEP)}
+            disabled={zoom >= ZOOM_MAX}
+            accessibilityRole="button"
+            accessibilityLabel="Zoom in"
+            accessibilityState={{ disabled: zoom >= ZOOM_MAX }}
+            style={[styles.toolBtn, zoom >= ZOOM_MAX && styles.toolDisabled]}
+          >
+            <Ionicons name="add" size={18} color={COLORS.textPrimary} />
+          </Pressable>
+
+          <Pressable
+            onPress={handleRotate}
+            accessibilityRole="button"
+            accessibilityLabel="Rotate photo 90 degrees"
+            style={styles.rotateBtn}
+          >
+            <View
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={16}
+                color={COLORS.textPrimary}
+              />
+            </View>
+            <Text style={styles.rotateText}>Rotate</Text>
+          </Pressable>
         </View>
 
-        <Pressable
-          onPress={() => adjustZoom(ZOOM_STEP)}
-          disabled={zoom >= ZOOM_MAX}
-          style={[styles.toolBtn, zoom >= ZOOM_MAX && styles.toolDisabled]}
-        >
-          <Ionicons name="add" size={20} color={COLORS.textPrimary} />
-        </Pressable>
+        {/* Puzzle Title & Grid Preview Selector */}
+        <View style={styles.formCard}>
+          <Text style={styles.fieldLabel}>PUZZLE TITLE</Text>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Name your puzzle..."
+            placeholderTextColor={COLORS.textMuted}
+            accessibilityLabel="Custom puzzle title"
+            maxLength={32}
+            style={styles.input}
+          />
 
-        <Pressable onPress={handleRotate} style={styles.rotateBtn}>
-          <Ionicons name="refresh-outline" size={18} color={COLORS.textPrimary} />
-          <Text style={styles.rotateText}>Rotate</Text>
-        </Pressable>
-      </View>
-
-      {/* Puzzle Title & Grid Preview Selector */}
-      <View style={styles.formCard}>
-        <Text style={styles.fieldLabel}>PUZZLE TITLE</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Name your puzzle..."
-          placeholderTextColor={COLORS.textMuted}
-          maxLength={32}
-          style={styles.input}
-        />
-
-        <Text style={styles.fieldLabel}>PREVIEW GRID SIZE</Text>
-        <View style={styles.gridRow}>
-          {([3, 4, 5] as GridSize[]).map((size) => {
-            const unlocked = unlockedGridSizes.includes(size);
-            const active = selectedGrid === size;
-            return (
-              <Pressable
-                key={size}
-                onPress={() => {
-                  if (!unlocked) {
-                    Alert.alert(
-                      '5×5 Locked',
-                      'Unlock 5×5 Master Grid in the Shop to play 5×5 custom puzzles.'
-                    );
-                    return;
+          <Text style={styles.fieldLabel}>BOARD SIZE</Text>
+          <View style={styles.gridRow} accessibilityRole="radiogroup">
+            {([3, 4, 5] as GridSize[]).map((size) => {
+              const unlocked = unlockedGridSizes.includes(size);
+              const active = selectedGrid === size;
+              return (
+                <Pressable
+                  key={size}
+                  onPress={() => {
+                    if (!unlocked) {
+                      showAppDialog({
+                        title: '5×5 Grid Locked',
+                        message:
+                          'Unlock the 5×5 Master Grid in the Shop to play 5×5 photo puzzles.',
+                        actions: [
+                          { label: 'OK', style: 'cancel' },
+                          {
+                            label: 'Open Shop',
+                            style: 'primary',
+                            onPress: () => navigate('shop'),
+                          },
+                        ],
+                      });
+                      return;
+                    }
+                    setSelectedGrid(size);
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityLabel={
+                    unlocked
+                      ? `${size} by ${size} grid`
+                      : `${size} by ${size} grid, locked`
                   }
-                  setSelectedGrid(size);
-                }}
-                style={[
-                  styles.gridChip,
-                  active && styles.gridChipActive,
-                  !unlocked && styles.toolDisabled,
-                ]}
-              >
-                <Text
+                  accessibilityState={{ selected: active, disabled: !unlocked }}
                   style={[
-                    styles.gridChipText,
-                    active && styles.gridChipTextActive,
+                    styles.gridChip,
+                    active && styles.gridChipActive,
+                    !unlocked && styles.toolDisabled,
                   ]}
                 >
-                  {size}×{size} {!unlocked ? '🔒' : ''}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.gridChipText,
+                      active && styles.gridChipTextActive,
+                    ]}
+                  >
+                    {size}×{size} {!unlocked ? '🔒' : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      </ScrollView>
 
-      {/* Confirm & Play Button */}
-      <Pressable
-        onPress={handleConfirmCrop}
-        disabled={processing}
-        style={({ pressed }) => [
-          styles.confirmBtn,
-          pressed && styles.pressed,
-        ]}
-      >
-        {processing ? (
-          <ActivityIndicator color="#111827" />
-        ) : (
-          <>
-            <Ionicons name="crop" size={19} color="#111827" />
-            <Text style={styles.confirmBtnText}>Crop & Play Puzzle</Text>
-          </>
-        )}
-      </Pressable>
-    </ScrollView>
+      {/* Sticky Bottom CTA + Privacy Notice (always easy to reach on small phones) */}
+      <View style={styles.footerBar}>
+        <Text style={styles.privacyNote}>
+          Stays private on your device unless you choose to publish it later.
+        </Text>
+        <Pressable
+          onPress={handleConfirmCrop}
+          disabled={processing}
+          accessibilityRole="button"
+          accessibilityLabel="Crop and play puzzle"
+          style={({ pressed }) => [
+            styles.confirmBtn,
+            pressed && styles.pressed,
+          ]}
+        >
+          {processing ? (
+            <ActivityIndicator color="#111827" />
+          ) : (
+            <>
+              <View
+                importantForAccessibility="no-hide-descendants"
+                accessibilityElementsHidden
+              >
+                <Ionicons name="crop" size={18} color="#111827" />
+              </View>
+              <Text style={styles.confirmBtnText}>Crop & Play</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  scroll: {
+  root: {
     flex: 1,
     width: '100%',
-  },
-  container: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    alignItems: 'center',
-    gap: 14,
     maxWidth: 460,
-    width: '100%',
     alignSelf: 'center',
   },
   topBar: {
@@ -375,11 +437,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 11,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -388,12 +453,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: COLORS.textPrimary,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
   },
   resetPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     borderRadius: 10,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -404,8 +469,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    alignItems: 'center',
+    gap: 10,
+  },
   cropViewport: {
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#090B10',
     borderWidth: 2.5,
@@ -441,21 +515,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 1,
   },
-  dragTip: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
   toolsRow: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   toolBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 11,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -463,9 +532,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   zoomReadout: {
-    paddingHorizontal: 12,
-    height: 44,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    height: 40,
+    borderRadius: 11,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -474,14 +543,14 @@ const styles = StyleSheet.create({
   },
   zoomText: {
     color: COLORS.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   rotateBtn: {
     flex: 1,
-    height: 44,
-    borderRadius: 12,
+    height: 40,
+    borderRadius: 11,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -492,7 +561,7 @@ const styles = StyleSheet.create({
   },
   rotateText: {
     color: COLORS.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   toolDisabled: {
@@ -501,9 +570,9 @@ const styles = StyleSheet.create({
   formCard: {
     width: '100%',
     backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
+    borderRadius: 15,
+    padding: 12,
+    gap: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -514,8 +583,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   input: {
-    height: 44,
-    borderRadius: 12,
+    height: 40,
+    borderRadius: 10,
     backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -530,7 +599,7 @@ const styles = StyleSheet.create({
   },
   gridChip: {
     flex: 1,
-    height: 40,
+    height: 36,
     borderRadius: 10,
     backgroundColor: COLORS.surfaceElevated,
     borderWidth: 1,
@@ -550,9 +619,23 @@ const styles = StyleSheet.create({
   gridChipTextActive: {
     color: COLORS.gold,
   },
+  footerBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    gap: 6,
+  },
+  privacyNote: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+  },
   confirmBtn: {
     width: '100%',
-    height: 54,
+    height: 50,
     borderRadius: 14,
     backgroundColor: COLORS.gold,
     flexDirection: 'row',

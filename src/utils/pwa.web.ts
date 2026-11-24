@@ -2,6 +2,7 @@ export interface PwaInstallState {
   canPromptNativeInstall: boolean;
   isIosSafariInstallable: boolean;
   isStandalone: boolean;
+  isOfflineReady: boolean;
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -11,6 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let initialized = false;
+let offlineReady = false;
 const listeners = new Set<(state: PwaInstallState) => void>();
 
 function detectStandalone(): boolean {
@@ -36,6 +38,7 @@ function getCurrentState(): PwaInstallState {
     canPromptNativeInstall: !isStandalone && deferredPrompt !== null,
     isIosSafariInstallable: !isStandalone && detectIosSafari(),
     isStandalone,
+    isOfflineReady: offlineReady,
   };
 }
 
@@ -51,15 +54,36 @@ function ensureHeadTag(selector: string, create: () => HTMLElement): void {
   }
 }
 
+function injectAccessibleFocusStyles(): void {
+  ensureHeadTag('style#tilecraft-a11y-focus', () => {
+    const style = document.createElement('style');
+    style.id = 'tilecraft-a11y-focus';
+    style.textContent = `
+      [role="button"]:focus-visible,
+      [role="link"]:focus-visible,
+      [tabindex]:focus-visible,
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible {
+        outline: 2.5px solid #F59E0B !important;
+        outline-offset: 2px !important;
+      }
+    `;
+    return style;
+  });
+}
+
 /**
- * Registers the TileCraft offline Service Worker, injects PWA head tags during
- * local dev, and listens for Chrome/Edge/Android `beforeinstallprompt`.
+ * Registers the TileCraft offline Service Worker immediately (fixing the bug where
+ * attaching a `load` listener inside React's `useEffect` missed an already-fired load event),
+ * injects visible keyboard focus styles, and handles Chrome/Android install prompts.
  */
 export function registerPwa(): void {
   if (initialized || typeof window === 'undefined') return;
   initialized = true;
 
-  // Ensure PWA tags exist even in local `expo start --web` dev mode
+  injectAccessibleFocusStyles();
+
   ensureHeadTag('link[rel="manifest"]', () => {
     const link = document.createElement('link');
     link.rel = 'manifest';
@@ -93,11 +117,41 @@ export function registerPwa(): void {
   });
 
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
-        // Ignore registration errors in restricted non-HTTPS dev contexts
-      });
-    });
+    const doRegister = () => {
+      navigator.serviceWorker
+        .register('/sw.js', { scope: '/' })
+        .then((registration) => {
+          if (registration.active || navigator.serviceWorker.controller) {
+            offlineReady = true;
+            emitState();
+          }
+
+          const watchWorker = (worker: ServiceWorker | null) => {
+            if (!worker) return;
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'activated') {
+                offlineReady = true;
+                emitState();
+              }
+            });
+          };
+
+          watchWorker(registration.installing);
+          watchWorker(registration.waiting);
+          registration.addEventListener('updatefound', () => {
+            watchWorker(registration.installing);
+          });
+        })
+        .catch(() => {
+          // Ignore SW registration errors on insecure non-localhost origins
+        });
+    };
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      doRegister();
+    } else {
+      window.addEventListener('load', doRegister, { once: true });
+    }
   }
 }
 

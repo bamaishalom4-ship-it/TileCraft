@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -25,10 +25,13 @@ import {
   downloadMarketplacePuzzle,
   fetchMarketplacePuzzles,
   flagMarketplacePuzzle,
+  type MarketplaceFeedStatus,
 } from '../services/marketplaceService';
 import { filterAndSortMarketplace } from '../utils/marketplaceUtils';
 import { useAppStore } from '../store/useAppStore';
 import { usePuzzleStore } from '../store/usePuzzleStore';
+import { showAppDialog } from '../store/useDialogStore';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { CoinBadge } from '../components/CoinBadge';
 import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
 import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
@@ -44,16 +47,19 @@ const FLAG_OPTIONS: Array<{ reason: FlagReason; label: string }> = [
 ];
 
 /**
- * TileCraft UGC Community Marketplace Screen:
- * - Search, Category filter chips, and Trending/Newest/Price sorting
- * - 2-column tactile puzzle cards with author, download count, and coin price
- * - Atomic Coin Download & Play flow (auto-respects unlocked grid sizes)
- * - Community NSFW/Abuse Flagging modal (3 flags trigger auto-quarantine)
- * - One-tap Publish flow for custom cropped puzzles
+ * TileCraft Community Marketplace Screen:
+ * - Distinct states: loading, offline, backend-error, preview/unconfigured, genuinely empty, ready
+ * - Never disguises a failed backend request as an empty community or invents fake listings
+ * - Clear, honest Publish behavior (either opens Publish flow or explains exactly what is needed)
  */
 export const MarketplaceScreen: React.FC = () => {
+  const isOnline = useOnlineStatus();
   const [puzzles, setPuzzles] = useState<MarketplacePuzzle[]>([]);
-  const [isLiveBackend, setIsLiveBackend] = useState(false);
+  const [feedStatus, setFeedStatus] = useState<MarketplaceFeedStatus>('empty');
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [canPublish, setCanPublish] = useState(false);
+  const [publishDisabledReason, setPublishDisabledReason] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,42 +70,62 @@ export const MarketplaceScreen: React.FC = () => {
   const [downloading, setDownloading] = useState(false);
   const [flagModalOpen, setFlagModalOpen] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const modalOpenerRef = useRef<HTMLElement | null>(null);
 
+  const economyHydrated = useAppStore((s) => s.economyHydrated);
   const coins = useAppStore((s) => s.coins);
   const unlockedGridSizes = useAppStore((s) => s.unlockedGridSizes);
   const customPuzzles = useAppStore((s) => s.customPuzzles);
   const navigate = useAppStore((s) => s.navigate);
-  const spendCoins = useAppStore((s) => s.spendCoins);
   const setCoinsFromServer = useAppStore((s) => s.setCoinsFromServer);
   const setActivePuzzleMeta = useAppStore((s) => s.setActivePuzzleMeta);
   const openCropperWithAsset = useAppStore((s) => s.openCropperWithAsset);
 
-  const setGridSize = usePuzzleStore((s) => s.setGridSize);
-  const setImageUri = usePuzzleStore((s) => s.setImageUri);
-  const shuffle = usePuzzleStore((s) => s.shuffle);
+  const startNewGame = usePuzzleStore((s) => s.startNewGame);
 
   const loadFeed = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
-    try {
-      const res = await fetchMarketplacePuzzles();
-      setPuzzles(res.puzzles);
-      setIsLiveBackend(res.isLiveBackend);
-    } catch (err) {
-      Alert.alert(
-        'Marketplace Unavailable',
-        err instanceof Error ? err.message : 'Could not load community puzzles.'
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    const res = await fetchMarketplacePuzzles();
+    setPuzzles(res.puzzles);
+    setFeedStatus(res.status);
+    setFeedError(res.errorMessage ?? null);
+    setCanPublish(res.canPublish);
+    setPublishDisabledReason(res.publishDisabledReason ?? null);
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
   useEffect(() => {
     loadFeed();
-  }, [loadFeed]);
+  }, [loadFeed, isOnline]);
+
+  // Escape dismissal & focus restoration for Detail & Flag modals
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const anyModal = inspectedPuzzle !== null || flagModalOpen;
+    if (anyModal) {
+      if (!modalOpenerRef.current) {
+        modalOpenerRef.current = document.activeElement as HTMLElement | null;
+      }
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (flagModalOpen) setFlagModalOpen(false);
+          else setInspectedPuzzle(null);
+        }
+      };
+      window.addEventListener('keydown', onKeyDown);
+      return () => window.removeEventListener('keydown', onKeyDown);
+    } else if (modalOpenerRef.current) {
+      const el = modalOpenerRef.current;
+      modalOpenerRef.current = null;
+      if (typeof el.focus === 'function' && document.contains(el)) {
+        setTimeout(() => el.focus(), 0);
+      }
+    }
+  }, [inspectedPuzzle, flagModalOpen]);
 
   const visiblePuzzles = useMemo(
     () =>
@@ -115,9 +141,12 @@ export const MarketplaceScreen: React.FC = () => {
     const chosenSize = unlockedGridSizes.includes(puzzle.recommendedGridSize)
       ? puzzle.recommendedGridSize
       : 4;
-    setGridSize(chosenSize);
-    setImageUri(puzzle.imageUrl);
-    shuffle();
+    startNewGame({
+      gridSize: chosenSize,
+      mode: 'marketplace',
+      title: puzzle.title,
+      imageUri: puzzle.imageUrl,
+    });
     setActivePuzzleMeta(puzzle.title, false);
     setInspectedPuzzle(null);
     navigate('game');
@@ -127,25 +156,29 @@ export const MarketplaceScreen: React.FC = () => {
     if (downloading) return;
     setDownloading(true);
     try {
-      const res = await downloadMarketplacePuzzle(puzzle, spendCoins, coins);
+      const res = await downloadMarketplacePuzzle(puzzle, coins);
       if (!res.ok) {
         if (res.error?.toLowerCase().includes('coin')) {
-          Alert.alert(
-            'Not Enough Coins',
-            `This puzzle costs ${puzzle.coinPrice} coins. Claim your daily reward or visit the Shop!`,
-            [
-              { text: 'Cancel', style: 'cancel' },
+          showAppDialog({
+            title: 'Not Enough Coins',
+            message: `This puzzle costs ${puzzle.coinPrice} coins. Claim your daily reward or visit the Shop!`,
+            actions: [
+              { label: 'Cancel', style: 'cancel' },
               {
-                text: 'Open Shop',
+                label: 'Open Shop',
+                style: 'primary',
                 onPress: () => {
                   setInspectedPuzzle(null);
                   navigate('shop');
                 },
               },
-            ]
-          );
+            ],
+          });
         } else {
-          Alert.alert('Download Failed', res.error ?? 'Please try again.');
+          showAppDialog({
+            title: 'Download Unavailable',
+            message: res.error ?? 'Could not download this puzzle right now.',
+          });
         }
         return;
       }
@@ -154,7 +187,6 @@ export const MarketplaceScreen: React.FC = () => {
         setCoinsFromServer(res.newBalance);
       }
 
-      // Optimistically mark owned & increment download count in current list
       setPuzzles((prev) =>
         prev.map((item) =>
           item.id === puzzle.id
@@ -181,7 +213,10 @@ export const MarketplaceScreen: React.FC = () => {
     setFlagModalOpen(false);
 
     const res = await flagMarketplacePuzzle(targetId, reason);
-    Alert.alert(res.ok ? 'Report Received' : 'Notice', res.message);
+    showAppDialog({
+      title: res.ok ? 'Report Received' : 'Report Notice',
+      message: res.message,
+    });
 
     if (res.ok && res.quarantined) {
       setInspectedPuzzle(null);
@@ -189,19 +224,53 @@ export const MarketplaceScreen: React.FC = () => {
     }
   };
 
-  const handleOpenPublish = async () => {
+  const handleOpenPublish = () => {
+    if (!isOnline || feedStatus === 'offline') {
+      showAppDialog({
+        title: 'Internet Connection Needed',
+        message:
+          'You are currently offline. Connect to the internet to publish a puzzle publicly. Private photo puzzles still work offline on your device!',
+      });
+      return;
+    }
+
+    if (!canPublish) {
+      showAppDialog({
+        title: 'Publishing Unavailable',
+        message:
+          publishDisabledReason ??
+          'Public publishing is currently unavailable on this server. You can still create private photo puzzles saved on your device.',
+        actions: [
+          { label: 'Close', style: 'cancel' },
+          {
+            label: 'Make Private Photo',
+            style: 'primary',
+            onPress: async () => {
+              const picked = await pickImageFromGallery();
+              if (picked.status === 'picked' && picked.asset) {
+                openCropperWithAsset(picked.asset);
+              }
+            },
+          },
+        ],
+      });
+      return;
+    }
+
     if (customPuzzles.length > 0) {
       setPublishModalOpen(true);
       return;
     }
 
-    Alert.alert(
-      'Craft an Image First',
-      'Pick a photo from your gallery and crop it into a 1:1 square before publishing to the Marketplace.',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    showAppDialog({
+      title: 'Craft a Photo Puzzle First',
+      message:
+        'Pick and crop a photo into a square puzzle before publishing it. Your photos stay private on your device until you explicitly choose to publish.',
+      actions: [
+        { label: 'Cancel', style: 'cancel' },
         {
-          text: 'Pick Photo',
+          label: 'Pick Photo',
+          style: 'primary',
           onPress: async () => {
             const picked = await pickImageFromGallery();
             if (picked.status === 'picked' && picked.asset) {
@@ -209,104 +278,241 @@ export const MarketplaceScreen: React.FC = () => {
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
+  const statusBadgeText =
+    feedStatus === 'offline'
+      ? '○ Offline'
+      : feedStatus === 'backend-error'
+      ? '▲ Backend Unavailable'
+      : feedStatus === 'unconfigured'
+      ? '○ Preview Mode'
+      : '● Community Catalog';
+
   const latestLocalPuzzle = customPuzzles[0];
+  const isFeedBrowseable = feedStatus === 'ready' || feedStatus === 'empty';
 
   return (
     <View style={styles.wrapper}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <Pressable onPress={() => navigate('menu')} style={styles.iconBtn}>
+        <Pressable
+          onPress={() => navigate('menu')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+          style={styles.iconBtn}
+        >
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Marketplace</Text>
-          <Text style={styles.modeTag}>
-            {isLiveBackend ? '● Supabase Live' : '○ Local Sandbox Preview'}
+          <Text style={styles.headerTitle} accessibilityRole="header">
+            Marketplace
           </Text>
+          <Text style={styles.modeTag}>{statusBadgeText}</Text>
         </View>
-        <CoinBadge coins={coins} onPress={() => navigate('shop')} />
+        <CoinBadge
+          coins={coins}
+          loading={!economyHydrated}
+          onPress={() => navigate('shop')}
+        />
       </View>
 
-      {/* Search + Upload Action */}
+      {/* Search + Publish Bar */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
-          <Ionicons name="search" size={16} color={COLORS.textMuted} />
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="search" size={16} color={COLORS.textMuted} />
+          </View>
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
+            editable={isFeedBrowseable}
             placeholder="Search puzzles or creators..."
             placeholderTextColor={COLORS.textMuted}
+            accessibilityLabel="Search community puzzles"
             style={styles.searchInput}
           />
         </View>
-        <Pressable onPress={handleOpenPublish} style={styles.uploadBtn}>
-          <Ionicons name="cloud-upload-outline" size={18} color="#111827" />
-          <Text style={styles.uploadBtnText}>Publish</Text>
+        <Pressable
+          onPress={handleOpenPublish}
+          accessibilityRole="button"
+          accessibilityLabel={
+            canPublish
+              ? 'Publish a crafted photo puzzle'
+              : 'Publishing currently unavailable — tap for details'
+          }
+          style={[
+            styles.uploadBtn,
+            !canPublish && styles.uploadBtnMuted,
+          ]}
+        >
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons
+              name={canPublish ? 'cloud-upload-outline' : 'information-circle-outline'}
+              size={18}
+              color={canPublish ? '#111827' : COLORS.textPrimary}
+            />
+          </View>
+          <Text
+            style={[
+              styles.uploadBtnText,
+              !canPublish && styles.uploadBtnTextMuted,
+            ]}
+          >
+            Publish
+          </Text>
         </Pressable>
       </View>
 
-      {/* Category Chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesScroll}
-        contentContainerStyle={styles.categoriesContent}
-      >
-        {(['All', ...PUZZLE_CATEGORIES] as Array<PuzzleCategory | 'All'>).map(
-          (cat) => {
-            const active = selectedCategory === cat;
-            return (
+      {/* Category & Sort controls only when catalog is actually reachable */}
+      {isFeedBrowseable ? (
+        <>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoriesScroll}
+            contentContainerStyle={styles.categoriesContent}
+          >
+            {(['All', ...PUZZLE_CATEGORIES] as Array<PuzzleCategory | 'All'>).map(
+              (cat) => {
+                const active = selectedCategory === cat;
+                return (
+                  <Pressable
+                    key={cat}
+                    onPress={() => setSelectedCategory(cat)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter by ${cat}`}
+                    accessibilityState={{ selected: active }}
+                    style={[styles.catChip, active && styles.catChipActive]}
+                  >
+                    <Text
+                      style={[
+                        styles.catChipText,
+                        active && styles.catChipTextActive,
+                      ]}
+                    >
+                      {cat}
+                    </Text>
+                  </Pressable>
+                );
+              }
+            )}
+          </ScrollView>
+
+          <View style={styles.sortRow}>
+            {(
+              [
+                { id: 'trending', label: 'Trending' },
+                { id: 'newest', label: 'Newest' },
+                { id: 'lowest-price', label: 'Free & Low' },
+              ] as Array<{ id: MarketplaceSort; label: string }>
+            ).map((s) => (
               <Pressable
-                key={cat}
-                onPress={() => setSelectedCategory(cat)}
-                style={[styles.catChip, active && styles.catChipActive]}
+                key={s.id}
+                onPress={() => setSortBy(s.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort by ${s.label}`}
+                accessibilityState={{ selected: sortBy === s.id }}
+                style={[styles.sortPill, sortBy === s.id && styles.sortPillActive]}
               >
                 <Text
-                  style={[styles.catChipText, active && styles.catChipTextActive]}
+                  style={[
+                    styles.sortPillText,
+                    sortBy === s.id && styles.sortPillTextActive,
+                  ]}
                 >
-                  {cat}
+                  {s.label}
                 </Text>
               </Pressable>
-            );
-          }
-        )}
-      </ScrollView>
+            ))}
+          </View>
+        </>
+      ) : null}
 
-      {/* Sort Bar */}
-      <View style={styles.sortRow}>
-        {(
-          [
-            { id: 'trending', label: 'Trending' },
-            { id: 'newest', label: 'Newest' },
-            { id: 'lowest-price', label: 'Free & Low' },
-          ] as Array<{ id: MarketplaceSort; label: string }>
-        ).map((s) => (
-          <Pressable
-            key={s.id}
-            onPress={() => setSortBy(s.id)}
-            style={[styles.sortPill, sortBy === s.id && styles.sortPillActive]}
-          >
-            <Text
-              style={[
-                styles.sortPillText,
-                sortBy === s.id && styles.sortPillTextActive,
-              ]}
-            >
-              {s.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Marketplace 2-Column Feed */}
+      {/* Distinct Loading / Offline / Error / Preview / Empty / Ready States */}
       {loading ? (
-        <View style={styles.centerBox}>
+        <View style={styles.stateBox}>
           <ActivityIndicator size="large" color={COLORS.gold} />
-          <Text style={styles.loadingText}>Loading community puzzles...</Text>
+          <Text style={styles.stateTitle}>Loading Marketplace...</Text>
+          <Text style={styles.stateSub}>Checking the community puzzle catalog.</Text>
+        </View>
+      ) : feedStatus === 'offline' ? (
+        <View style={styles.stateBox}>
+          <Ionicons name="cloud-offline-outline" size={44} color="#38BDF8" />
+          <Text style={styles.stateTitle}>You’re Offline</Text>
+          <Text style={styles.stateSub}>
+            {feedError ??
+              'Community Marketplace needs an internet connection. Classic puzzles and your saved photo puzzles work offline right now.'}
+          </Text>
+          <View style={styles.stateActions}>
+            <Pressable
+              onPress={() => navigate('menu')}
+              accessibilityRole="button"
+              accessibilityLabel="Return home to play offline puzzles"
+              style={styles.statePrimaryBtn}
+            >
+              <Text style={styles.statePrimaryText}>Play Offline Puzzles</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => loadFeed(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading Marketplace"
+              style={styles.stateSecondaryBtn}
+            >
+              <Text style={styles.stateSecondaryText}>Try Again</Text>
+            </Pressable>
+          </View>
+          <MadeByKuboFooter variant="compact" />
+        </View>
+      ) : feedStatus === 'backend-error' || feedStatus === 'unconfigured' ? (
+        <View style={styles.stateBox}>
+          <Ionicons
+            name={
+              feedStatus === 'unconfigured'
+                ? 'sparkles-outline'
+                : 'alert-circle-outline'
+            }
+            size={44}
+            color={COLORS.gold}
+          />
+          <Text style={styles.stateTitle}>
+            {feedStatus === 'unconfigured'
+              ? 'Marketplace Preview — Coming Soon'
+              : 'Marketplace Temporarily Unavailable'}
+          </Text>
+          <Text style={styles.stateSub}>{feedError}</Text>
+          {publishDisabledReason ? (
+            <View style={styles.infoNoteBox}>
+              <Text style={styles.infoNoteText}>{publishDisabledReason}</Text>
+            </View>
+          ) : null}
+          <View style={styles.stateActions}>
+            <Pressable
+              onPress={() => loadFeed(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Retry connecting to Marketplace"
+              style={styles.stateSecondaryBtn}
+            >
+              <Text style={styles.stateSecondaryText}>Retry</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => navigate('menu')}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Classic and Photo Puzzles"
+              style={styles.statePrimaryBtn}
+            >
+              <Text style={styles.statePrimaryText}>Play Local Puzzles</Text>
+            </Pressable>
+          </View>
+          <MadeByKuboFooter variant="compact" />
         </View>
       ) : (
         <FlatList
@@ -322,12 +528,30 @@ export const MarketplaceScreen: React.FC = () => {
               tintColor={COLORS.gold}
             />
           }
+          ListHeaderComponent={
+            !canPublish && publishDisabledReason ? (
+              <View style={styles.publishNoticeBar}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color={COLORS.gold}
+                />
+                <Text style={styles.publishNoticeText}>
+                  {publishDisabledReason}
+                </Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
-            <View style={styles.centerBox}>
-              <Ionicons name="images-outline" size={38} color={COLORS.textMuted} />
-              <Text style={styles.emptyTitle}>No matching puzzles yet</Text>
-              <Text style={styles.emptySub}>
-                Be the first to publish one in this category!
+            <View style={styles.stateBox}>
+              <Ionicons name="images-outline" size={40} color={COLORS.textMuted} />
+              <Text style={styles.stateTitle}>No community puzzles yet</Text>
+              <Text style={styles.stateSub}>
+                {searchQuery.trim() || selectedCategory !== 'All'
+                  ? 'No puzzles matched your current filter. Try clearing your search.'
+                  : canPublish
+                  ? 'The live catalog is open! Craft a photo puzzle and be the first to publish.'
+                  : 'Check back soon as community puzzles are approved.'}
               </Text>
             </View>
           }
@@ -335,6 +559,8 @@ export const MarketplaceScreen: React.FC = () => {
           renderItem={({ item }) => (
             <Pressable
               onPress={() => setInspectedPuzzle(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title} by ${item.authorName}, ${item.recommendedGridSize} by ${item.recommendedGridSize}, ${item.isOwned ? 'owned' : item.coinPrice === 0 ? 'free' : `${item.coinPrice} coins`}`}
               style={({ pressed }) => [
                 styles.card,
                 pressed && styles.cardPressed,
@@ -348,10 +574,7 @@ export const MarketplaceScreen: React.FC = () => {
                   </Text>
                 </View>
                 <View
-                  style={[
-                    styles.priceBadge,
-                    item.isOwned && styles.ownedBadge,
-                  ]}
+                  style={[styles.priceBadge, item.isOwned && styles.ownedBadge]}
                 >
                   <Text
                     style={[
@@ -399,7 +622,7 @@ export const MarketplaceScreen: React.FC = () => {
         onRequestClose={() => setInspectedPuzzle(null)}
       >
         {inspectedPuzzle ? (
-          <View style={styles.modalBackdrop}>
+          <View style={styles.modalBackdrop} accessibilityViewIsModal>
             <View style={styles.detailCard}>
               <Image
                 source={{ uri: inspectedPuzzle.imageUrl }}
@@ -410,12 +633,14 @@ export const MarketplaceScreen: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.detailTitle}>{inspectedPuzzle.title}</Text>
                   <Text style={styles.detailAuthor}>
-                    Crafted by {inspectedPuzzle.authorName} · {inspectedPuzzle.category}
+                    Crafted by {inspectedPuzzle.authorName} ·{' '}
+                    {inspectedPuzzle.category}
                   </Text>
                 </View>
                 <Pressable
                   onPress={() => setFlagModalOpen(true)}
                   style={styles.flagIconBtn}
+                  accessibilityRole="button"
                   accessibilityLabel="Report inappropriate content"
                 >
                   <Ionicons name="flag-outline" size={18} color="#F87171" />
@@ -435,6 +660,7 @@ export const MarketplaceScreen: React.FC = () => {
               <Pressable
                 onPress={() => handleDownloadAndPlay(inspectedPuzzle)}
                 disabled={downloading}
+                accessibilityRole="button"
                 style={styles.downloadCta}
               >
                 {downloading ? (
@@ -459,6 +685,8 @@ export const MarketplaceScreen: React.FC = () => {
 
               <Pressable
                 onPress={() => setInspectedPuzzle(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Close puzzle details"
                 style={styles.cancelLink}
               >
                 <Text style={styles.cancelLinkText}>Close</Text>
@@ -475,7 +703,7 @@ export const MarketplaceScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setFlagModalOpen(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <View style={styles.modalBackdrop} accessibilityViewIsModal>
           <View style={styles.flagCard}>
             <Text style={styles.flagTitle}>Report Puzzle</Text>
             <Text style={styles.flagSubtitle}>
@@ -485,6 +713,8 @@ export const MarketplaceScreen: React.FC = () => {
               <Pressable
                 key={opt.reason}
                 onPress={() => handleFlagReason(opt.reason)}
+                accessibilityRole="button"
+                accessibilityLabel={`Report for ${opt.label}`}
                 style={styles.flagOptionBtn}
               >
                 <Text style={styles.flagOptionText}>{opt.label}</Text>
@@ -493,6 +723,8 @@ export const MarketplaceScreen: React.FC = () => {
             ))}
             <Pressable
               onPress={() => setFlagModalOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel report"
               style={styles.cancelLink}
             >
               <Text style={styles.cancelLinkText}>Cancel</Text>
@@ -511,6 +743,7 @@ export const MarketplaceScreen: React.FC = () => {
         onPublished={(newPuzzle) => {
           if (newPuzzle.moderationStatus === 'approved') {
             setPuzzles((prev) => [newPuzzle, ...prev]);
+            setFeedStatus('ready');
           }
         }}
       />
@@ -589,10 +822,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  uploadBtnMuted: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
   uploadBtnText: {
     color: '#111827',
     fontSize: 13,
     fontWeight: '900',
+  },
+  uploadBtnTextMuted: {
+    color: COLORS.textSecondary,
   },
   categoriesScroll: {
     maxHeight: 40,
@@ -633,7 +874,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: 'transparent',
   },
   sortPillActive: {
     backgroundColor: COLORS.surfaceElevated,
@@ -645,6 +885,86 @@ const styles = StyleSheet.create({
   },
   sortPillTextActive: {
     color: COLORS.textPrimary,
+  },
+  publishNoticeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    marginBottom: 8,
+  },
+  publishNoticeText: {
+    flex: 1,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  stateBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 26,
+    paddingVertical: 40,
+    gap: 10,
+  },
+  stateTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 18,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  stateSub: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  infoNoteBox: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    width: '100%',
+  },
+  infoNoteText: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+  },
+  stateActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  statePrimaryBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.gold,
+  },
+  statePrimaryText: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  stateSecondaryBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  stateSecondaryText: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
   },
   listContent: {
     paddingHorizontal: 16,
@@ -738,26 +1058,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 11,
     fontWeight: '700',
-  },
-  centerBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-    gap: 8,
-  },
-  loadingText: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-  },
-  emptyTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  emptySub: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
   },
   modalBackdrop: {
     flex: 1,

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   ScrollView,
@@ -12,7 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { FrameThemeId, GridSize } from '../types/puzzle';
 import { usePuzzleStore } from '../store/usePuzzleStore';
 import { useAppStore } from '../store/useAppStore';
+import { showAppDialog } from '../store/useDialogStore';
 import { pickImageFromGallery } from '../services/imageService';
+import { formatElapsedTime } from '../hooks/usePuzzleTimer';
 import { CoinBadge } from '../components/CoinBadge';
 import { DailyRewardModal } from '../components/DailyRewardModal';
 import { InstallPwaBanner } from '../components/InstallPwaBanner';
@@ -34,45 +35,153 @@ const THEME_IDS: FrameThemeId[] = [
 ];
 
 /**
- * TileCraft Main Menu:
- * - Play Classic numbered boards (3x3, 4x4, 5x5)
- * - Pick & crop a custom gallery photo into a 1:1 sliding puzzle
- * - Replay saved local custom puzzles
- * - Access the Coin Shop & Phase 3 UGC Marketplace entry point
+ * TileCraft Home Screen:
+ * - Player-facing copy & prominent primary play actions above the fold on mobile
+ * - Resume active saved game with overwrite protection before starting a new game
+ * - Quick 3x3 launch, Make a photo puzzle (private on device), & direct size/frame controls
+ * - Daily login streak & install prompt placed cleanly below primary play actions
  */
 export const MainMenuScreen: React.FC = () => {
   const [picking, setPicking] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
 
   const gridSize = usePuzzleStore((s) => s.gridSize);
   const frameTheme = usePuzzleStore((s) => s.frameTheme);
   const setGridSize = usePuzzleStore((s) => s.setGridSize);
   const setFrameTheme = usePuzzleStore((s) => s.setFrameTheme);
-  const setImageUri = usePuzzleStore((s) => s.setImageUri);
-  const shuffle = usePuzzleStore((s) => s.shuffle);
+  const startNewGame = usePuzzleStore((s) => s.startNewGame);
+  const restoreSavedGame = usePuzzleStore((s) => s.restoreSavedGame);
 
+  const economyHydrated = useAppStore((s) => s.economyHydrated);
   const coins = useAppStore((s) => s.coins);
   const dailyStreak = useAppStore((s) => s.dailyStreak);
   const lastDailyClaimDate = useAppStore((s) => s.lastDailyClaimDate);
   const unlockedGridSizes = useAppStore((s) => s.unlockedGridSizes);
   const unlockedAllFrames = useAppStore((s) => s.unlockedAllFrames);
   const customPuzzles = useAppStore((s) => s.customPuzzles);
+  const storageWarning = useAppStore((s) => s.storageWarning);
+  const savedActiveGame = useAppStore((s) => s.savedActiveGame);
+
   const navigate = useAppStore((s) => s.navigate);
   const openCropperWithAsset = useAppStore((s) => s.openCropperWithAsset);
   const setActivePuzzleMeta = useAppStore((s) => s.setActivePuzzleMeta);
+  const resolveImageForSavedGame = useAppStore((s) => s.resolveImageForSavedGame);
+  const clearSavedActiveGame = useAppStore((s) => s.clearSavedActiveGame);
 
   const streakStatus = evaluateDailyStreak(lastDailyClaimDate, dailyStreak);
 
+  /**
+   * Protects an in-progress saved game from being silently overwritten.
+   */
+  const confirmStartIfActiveSave = (onConfirmNew: () => void) => {
+    if (savedActiveGame && savedActiveGame.moves > 0) {
+      showAppDialog({
+        title: 'Replace Unfinished Game?',
+        message: `You have "${savedActiveGame.puzzleTitle}" (${savedActiveGame.gridSize}×${savedActiveGame.gridSize}, ${savedActiveGame.moves} moves, ${formatElapsedTime(savedActiveGame.elapsedSeconds)}) saved. Starting a new puzzle will replace it.`,
+        actions: [
+          {
+            label: 'Resume Saved',
+            style: 'default',
+            onPress: () => {
+              handleResumeSavedGame();
+            },
+          },
+          {
+            label: 'Start New',
+            style: 'primary',
+            onPress: () => {
+              clearSavedActiveGame().catch(() => {});
+              onConfirmNew();
+            },
+          },
+        ],
+      });
+      return;
+    }
+    onConfirmNew();
+  };
+
+  const handleResumeSavedGame = async () => {
+    if (!savedActiveGame || resuming) return;
+    setResuming(true);
+    try {
+      const resolvedUri = await resolveImageForSavedGame(savedActiveGame);
+      if (savedActiveGame.mode === 'photo' && !resolvedUri) {
+        showAppDialog({
+          title: 'Saved Photo Missing',
+          message:
+            'The saved photo for this puzzle could not be restored from device storage. You can start a fresh puzzle instead.',
+          actions: [
+            {
+              label: 'Clear Save',
+              style: 'primary',
+              onPress: () => {
+                clearSavedActiveGame().catch(() => {});
+              },
+            },
+          ],
+        });
+        return;
+      }
+
+      restoreSavedGame(savedActiveGame, resolvedUri);
+      setActivePuzzleMeta(
+        savedActiveGame.puzzleTitle,
+        savedActiveGame.mode === 'photo'
+      );
+      navigate('game');
+    } finally {
+      setResuming(false);
+    }
+  };
+
+  const handlePlayQuick3x3 = () => {
+    confirmStartIfActiveSave(() => {
+      startNewGame({
+        gridSize: 3,
+        mode: 'classic',
+        title: 'Quick 3×3',
+        imageUri: null,
+      });
+      setActivePuzzleMeta('Quick 3×3', false);
+      navigate('game');
+    });
+  };
+
+  const handlePlaySelectedClassic = () => {
+    confirmStartIfActiveSave(() => {
+      const label =
+        gridSize === 3
+          ? 'Quick 3×3'
+          : gridSize === 4
+          ? 'Classic 4×4'
+          : 'Master 5×5';
+      startNewGame({
+        gridSize,
+        mode: 'classic',
+        title: label,
+        imageUri: null,
+      });
+      setActivePuzzleMeta(label, false);
+      navigate('game');
+    });
+  };
+
   const handleSelectGridSize = (size: GridSize) => {
     if (!unlockedGridSizes.includes(size)) {
-      Alert.alert(
-        '5×5 Master Grid Locked',
-        'Unlock the 5×5 Master Grid in the Shop for 150 coins!',
-        [
-          { text: 'Not Now', style: 'cancel' },
-          { text: 'Open Shop', onPress: () => navigate('shop') },
-        ]
-      );
+      showAppDialog({
+        title: '5×5 Master Grid Locked',
+        message: 'Unlock the 5×5 Master Grid in the Shop for 150 coins!',
+        actions: [
+          { label: 'Not Now', style: 'cancel' },
+          {
+            label: 'Open Shop',
+            style: 'primary',
+            onPress: () => navigate('shop'),
+          },
+        ],
+      });
       return;
     }
     setGridSize(size);
@@ -80,25 +189,22 @@ export const MainMenuScreen: React.FC = () => {
 
   const handleSelectFrame = (id: FrameThemeId) => {
     if (id !== 'classic-black' && !unlockedAllFrames) {
-      Alert.alert(
-        'Retro Frame Pack Locked',
-        'Unlock Crimson, Sunburst, and Cobalt vintage trays in the Shop for 100 coins!',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Shop', onPress: () => navigate('shop') },
-        ]
-      );
+      showAppDialog({
+        title: 'Retro Frame Pack Locked',
+        message:
+          'Unlock Crimson, Sunburst, and Cobalt vintage trays in the Shop for 100 coins!',
+        actions: [
+          { label: 'Cancel', style: 'cancel' },
+          {
+            label: 'Open Shop',
+            style: 'primary',
+            onPress: () => navigate('shop'),
+          },
+        ],
+      });
       return;
     }
     setFrameTheme(id);
-  };
-
-  const handlePlayClassic = () => {
-    setImageUri(null);
-    shuffle();
-    const label = gridSize === 3 ? '8-Puzzle' : gridSize === 4 ? 'Classic 15-Puzzle' : 'Master 24-Puzzle';
-    setActivePuzzleMeta(label, false);
-    navigate('game');
   };
 
   const handleCreateCustomPuzzle = async () => {
@@ -107,34 +213,52 @@ export const MainMenuScreen: React.FC = () => {
     try {
       const result = await pickImageFromGallery();
       if (result.status === 'denied') {
-        Alert.alert(
-          'Photo Permission Needed',
-          'Please allow photo library access in Settings to craft custom sliding puzzles.'
-        );
+        showAppDialog({
+          title: 'Photo Permission Needed',
+          message:
+            'Please allow photo library access so you can turn a photo into a sliding puzzle.',
+        });
       } else if (result.status === 'picked' && result.asset) {
         openCropperWithAsset(result.asset);
       }
     } catch {
-      Alert.alert('Could Not Open Gallery', 'Please try again.');
+      showAppDialog({
+        title: 'Could Not Open Photos',
+        message: 'Please try selecting an image again.',
+      });
     } finally {
       setPicking(false);
     }
   };
 
   const handlePlaySavedCustom = (
+    id: string,
     title: string,
     imageUri: string,
     preferredSize: GridSize
   ) => {
-    const sizeToUse = unlockedGridSizes.includes(preferredSize) ? preferredSize : 4;
-    setGridSize(sizeToUse);
-    setImageUri(imageUri);
-    shuffle();
-    setActivePuzzleMeta(title, true);
-    navigate('game');
+    confirmStartIfActiveSave(() => {
+      const sizeToUse = unlockedGridSizes.includes(preferredSize)
+        ? preferredSize
+        : 4;
+      startNewGame({
+        gridSize: sizeToUse,
+        mode: 'photo',
+        title,
+        imageUri,
+        craftedPuzzleId: id,
+      });
+      setActivePuzzleMeta(title, true);
+      navigate('game');
+    });
   };
 
   const currentTheme = FRAME_THEMES[frameTheme];
+  const savedThumbUri =
+    savedActiveGame?.mode === 'photo'
+      ? customPuzzles.find((p) => p.id === savedActiveGame.craftedPuzzleId)
+          ?.imageUri ?? null
+      : savedActiveGame?.remoteImageUrl ?? null;
 
   return (
     <ScrollView
@@ -150,56 +274,152 @@ export const MainMenuScreen: React.FC = () => {
               styles.miniLogoFrame,
               { backgroundColor: currentTheme.frameOuter },
             ]}
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
           >
             <View style={styles.miniLogoGrid}>
               <View style={styles.miniTile} />
-              <View style={styles.miniTile} />
+              <View style={styles.miniTileGold} />
               <View style={styles.miniTile} />
               <View style={styles.miniBlank} />
             </View>
           </View>
-          <View>
-            <Text style={styles.brandTitle}>TileCraft</Text>
-            <Text style={styles.brandTagline}>Tactile Sliding Puzzle & UGC</Text>
+          <View style={styles.brandTextWrap}>
+            <Text style={styles.brandTitle} accessibilityRole="header">
+              TileCraft
+            </Text>
+            <Text style={styles.brandTagline}>
+              Turn any photo into a sliding puzzle.
+            </Text>
           </View>
         </View>
 
-        <CoinBadge coins={coins} onPress={() => navigate('shop')} />
+        <CoinBadge
+          coins={coins}
+          loading={!economyHydrated}
+          onPress={() => navigate('shop')}
+        />
       </View>
 
-      {/* Installable PWA Banner (Web browser tabs only) */}
-      <InstallPwaBanner />
-
-      {/* Daily Streak Banner (glows when today's reward is ready) */}
-      {streakStatus.canClaimToday ? (
+      {/* Resume Active Game Card (shown whenever a valid unfinished save exists) */}
+      {savedActiveGame ? (
         <Pressable
-          onPress={() => setDailyModalOpen(true)}
+          onPress={handleResumeSavedGame}
+          disabled={resuming}
+          accessibilityRole="button"
+          accessibilityLabel={`Resume puzzle ${savedActiveGame.puzzleTitle}, ${savedActiveGame.gridSize} by ${savedActiveGame.gridSize}, ${savedActiveGame.moves} moves`}
           style={({ pressed }) => [
-            styles.dailyBanner,
+            styles.resumeCard,
             pressed && styles.pressedScale,
           ]}
         >
-          <View style={styles.dailyBannerLeft}>
-            <Ionicons name="flame" size={20} color={COLORS.gold} />
-            <View>
-              <Text style={styles.dailyBannerTitle}>
-                Day {streakStatus.nextClaimDay} Daily Reward Ready!
-              </Text>
-              <Text style={styles.dailyBannerSub}>
-                Tap to claim +{streakStatus.nextRewardCoins} free coins
-              </Text>
+          {savedThumbUri ? (
+            <Image source={{ uri: savedThumbUri }} style={styles.resumeThumb} />
+          ) : (
+            <View
+              style={styles.resumeIconWrap}
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <Ionicons name="play-circle" size={26} color="#10B981" />
             </View>
+          )}
+          <View style={styles.resumeTextWrap}>
+            <Text style={styles.resumeEyebrow}>IN PROGRESS</Text>
+            <Text style={styles.resumeTitle} numberOfLines={1}>
+              Resume puzzle · {savedActiveGame.puzzleTitle}
+            </Text>
+            <Text style={styles.resumeMeta}>
+              {savedActiveGame.gridSize}×{savedActiveGame.gridSize} ·{' '}
+              {savedActiveGame.moves} moves ·{' '}
+              {formatElapsedTime(savedActiveGame.elapsedSeconds)}
+            </Text>
           </View>
-          <View style={styles.claimPill}>
-            <Text style={styles.claimPillText}>CLAIM</Text>
+          <View style={styles.resumePill}>
+            <Text style={styles.resumePillText}>
+              {resuming ? '...' : 'Resume'}
+            </Text>
           </View>
         </Pressable>
       ) : null}
 
-      {/* Hero Play Card */}
+      {/* Primary Play Actions (Always above the fold at 375×667) */}
+      <View style={styles.primaryStack}>
+        <Pressable
+          onPress={handlePlayQuick3x3}
+          accessibilityRole="button"
+          accessibilityLabel="Play a quick 3 by 3 puzzle"
+          style={({ pressed }) => [
+            styles.primaryCta,
+            pressed && styles.pressedScale,
+          ]}
+        >
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="play" size={20} color="#111827" />
+          </View>
+          <View style={styles.ctaTextGroup}>
+            <Text style={styles.primaryCtaText}>Play a quick puzzle</Text>
+            <Text style={styles.primaryCtaSub}>Starts a 3×3 board right away</Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={handleCreateCustomPuzzle}
+          disabled={picking}
+          accessibilityRole="button"
+          accessibilityLabel="Make a photo puzzle from your device"
+          style={({ pressed }) => [
+            styles.photoCta,
+            pressed && styles.pressedScale,
+          ]}
+        >
+          <View
+            style={styles.featureIconWrap}
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="images" size={22} color={COLORS.gold} />
+          </View>
+          <View style={styles.featureTextWrap}>
+            <Text style={styles.featureTitle}>
+              {picking ? 'Opening Photos...' : 'Make a photo puzzle'}
+            </Text>
+            <Text style={styles.featureSubtitle}>
+              Crop any photo into tiles. Stays private on your device.
+            </Text>
+          </View>
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+          </View>
+        </Pressable>
+      </View>
+
+      {/* Direct Board Size & Frame Controls (no extra menus needed) */}
       <View style={styles.heroCard}>
-        <Text style={styles.sectionEyebrow}>CHOOSE BOARD SIZE</Text>
-        <View style={styles.gridRow}>
+        <View style={styles.boardHeaderRow}>
+          <Text style={styles.sectionEyebrow}>CHOOSE BOARD SIZE</Text>
+          <Pressable
+            onPress={handlePlaySelectedClassic}
+            accessibilityRole="button"
+            accessibilityLabel={`Play ${gridSize} by ${gridSize} classic puzzle`}
+            style={({ pressed }) => [
+              styles.playSizeLink,
+              pressed && styles.pressedScale,
+            ]}
+          >
+            <Text style={styles.playSizeLinkText}>
+              Play {gridSize}×{gridSize} →
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.gridRow} accessibilityRole="radiogroup">
           {GRID_OPTIONS.map((opt) => {
             const unlocked = unlockedGridSizes.includes(opt.size);
             const selected = gridSize === opt.size;
@@ -207,6 +427,13 @@ export const MainMenuScreen: React.FC = () => {
               <Pressable
                 key={opt.size}
                 onPress={() => handleSelectGridSize(opt.size)}
+                accessibilityRole="radio"
+                accessibilityLabel={
+                  unlocked
+                    ? `${opt.label} ${opt.sub} board`
+                    : `${opt.label} Master board, locked, 150 coins`
+                }
+                accessibilityState={{ selected, disabled: !unlocked }}
                 style={[
                   styles.gridOption,
                   selected && styles.gridOptionActive,
@@ -223,11 +450,16 @@ export const MainMenuScreen: React.FC = () => {
                     {opt.label}
                   </Text>
                   {!unlocked && (
-                    <Ionicons
-                      name="lock-closed"
-                      size={14}
-                      color={COLORS.gold}
-                    />
+                    <View
+                      importantForAccessibility="no-hide-descendants"
+                      accessibilityElementsHidden
+                    >
+                      <Ionicons
+                        name="lock-closed"
+                        size={13}
+                        color={COLORS.gold}
+                      />
+                    </View>
                   )}
                 </View>
                 <Text
@@ -243,10 +475,9 @@ export const MainMenuScreen: React.FC = () => {
           })}
         </View>
 
-        {/* Retro Molded Frame Picker */}
         <View style={styles.framePickerRow}>
           <Text style={styles.framePickerLabel}>Tray Frame</Text>
-          <View style={styles.frameSwatches}>
+          <View style={styles.frameSwatches} accessibilityRole="radiogroup">
             {THEME_IDS.map((id) => {
               const t = FRAME_THEMES[id];
               const locked = id !== 'classic-black' && !unlockedAllFrames;
@@ -255,6 +486,13 @@ export const MainMenuScreen: React.FC = () => {
                 <Pressable
                   key={id}
                   onPress={() => handleSelectFrame(id)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={
+                    locked
+                      ? `${t.label} frame, locked`
+                      : `${t.label} frame`
+                  }
+                  accessibilityState={{ selected, disabled: locked }}
                   style={[
                     styles.frameSwatch,
                     { backgroundColor: t.frameOuter },
@@ -262,82 +500,37 @@ export const MainMenuScreen: React.FC = () => {
                   ]}
                 >
                   {locked && (
-                    <Ionicons name="lock-closed" size={11} color="#F8FAFC" />
+                    <View
+                      importantForAccessibility="no-hide-descendants"
+                      accessibilityElementsHidden
+                    >
+                      <Ionicons name="lock-closed" size={11} color="#F8FAFC" />
+                    </View>
                   )}
                 </Pressable>
               );
             })}
           </View>
         </View>
-
-        {/* Primary Play CTA */}
-        <Pressable
-          onPress={handlePlayClassic}
-          style={({ pressed }) => [
-            styles.primaryCta,
-            pressed && styles.pressedScale,
-          ]}
-        >
-          <Ionicons name="play" size={20} color="#111827" />
-          <Text style={styles.primaryCtaText}>Play Classic {gridSize}×{gridSize}</Text>
-        </Pressable>
       </View>
 
-      {/* Create Custom Photo Puzzle Card */}
-      <Pressable
-        onPress={handleCreateCustomPuzzle}
-        disabled={picking}
-        style={({ pressed }) => [
-          styles.featureCard,
-          styles.photoCard,
-          pressed && styles.pressedScale,
-        ]}
-      >
-        <View style={styles.featureIconWrap}>
-          <Ionicons name="images" size={24} color={COLORS.gold} />
+      {/* Storage Warning (if browser IndexedDB failed) */}
+      {storageWarning ? (
+        <View style={styles.warningCard} accessibilityRole="alert">
+          <Ionicons name="warning-outline" size={16} color={COLORS.gold} />
+          <Text style={styles.warningText}>{storageWarning}</Text>
         </View>
-        <View style={styles.featureTextWrap}>
-          <Text style={styles.featureTitle}>
-            {picking ? 'Opening Gallery...' : 'Craft Custom Photo Puzzle'}
-          </Text>
-          <Text style={styles.featureSubtitle}>
-            Pick any image, pan & zoom in our 1:1 square grid cropper, and play instantly.
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
-      </Pressable>
+      ) : null}
 
-      {/* Secondary Actions: Shop & Marketplace */}
-      <View style={styles.dualRow}>
-        <Pressable
-          onPress={() => navigate('shop')}
-          style={({ pressed }) => [
-            styles.halfCard,
-            pressed && styles.pressedScale,
-          ]}
-        >
-          <Ionicons name="cart" size={22} color={COLORS.gold} />
-          <Text style={styles.halfCardTitle}>Coin Shop</Text>
-          <Text style={styles.halfCardSub}>Packs, Daily & Unlocks</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => navigate('marketplace')}
-          style={({ pressed }) => [
-            styles.halfCard,
-            pressed && styles.pressedScale,
-          ]}
-        >
-          <Ionicons name="globe-outline" size={22} color="#38BDF8" />
-          <Text style={styles.halfCardTitle}>Marketplace</Text>
-          <Text style={styles.halfCardSub}>Browse & Publish UGC</Text>
-        </Pressable>
-      </View>
-
-      {/* Player's Crafted Local Puzzles */}
+      {/* Saved Crafted Photo Puzzles (persisted in IndexedDB / device storage) */}
       {customPuzzles.length > 0 && (
         <View style={styles.librarySection}>
-          <Text style={styles.sectionEyebrow}>YOUR CRAFTED PUZZLES</Text>
+          <View style={styles.libraryHeader}>
+            <Text style={styles.sectionEyebrow}>YOUR CRAFTED PUZZLES</Text>
+            <Text style={styles.libraryCount}>
+              {customPuzzles.length} saved locally
+            </Text>
+          </View>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -348,11 +541,14 @@ export const MainMenuScreen: React.FC = () => {
                 key={item.id}
                 onPress={() =>
                   handlePlaySavedCustom(
+                    item.id,
                     item.title,
                     item.imageUri,
                     item.preferredGridSize
                   )
                 }
+                accessibilityRole="button"
+                accessibilityLabel={`Play saved photo puzzle ${item.title}, ${item.preferredGridSize} by ${item.preferredGridSize}`}
                 style={({ pressed }) => [
                   styles.customThumbCard,
                   pressed && styles.pressedScale,
@@ -376,6 +572,82 @@ export const MainMenuScreen: React.FC = () => {
         </View>
       )}
 
+      {/* Secondary Destinations: Shop & Community Marketplace */}
+      <View style={styles.dualRow}>
+        <Pressable
+          onPress={() => navigate('shop')}
+          accessibilityRole="button"
+          accessibilityLabel="Open Coin Shop for upgrades, daily rewards, and packs"
+          style={({ pressed }) => [
+            styles.halfCard,
+            pressed && styles.pressedScale,
+          ]}
+        >
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="cart" size={20} color={COLORS.gold} />
+          </View>
+          <Text style={styles.halfCardTitle}>Coin Shop</Text>
+          <Text style={styles.halfCardSub}>Unlocks & daily coins</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigate('marketplace')}
+          accessibilityRole="button"
+          accessibilityLabel="Open Community Marketplace"
+          style={({ pressed }) => [
+            styles.halfCard,
+            pressed && styles.pressedScale,
+          ]}
+        >
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="globe-outline" size={20} color="#38BDF8" />
+          </View>
+          <Text style={styles.halfCardTitle}>Marketplace</Text>
+          <Text style={styles.halfCardSub}>Community puzzles</Text>
+        </Pressable>
+      </View>
+
+      {/* Daily Streak & Install Banner (Placed below primary play actions) */}
+      {economyHydrated && streakStatus.canClaimToday ? (
+        <Pressable
+          onPress={() => setDailyModalOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Claim Day ${streakStatus.nextClaimDay} daily reward of ${streakStatus.nextRewardCoins} coins`}
+          style={({ pressed }) => [
+            styles.dailyBanner,
+            pressed && styles.pressedScale,
+          ]}
+        >
+          <View style={styles.dailyBannerLeft}>
+            <View
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <Ionicons name="flame" size={20} color={COLORS.gold} />
+            </View>
+            <View>
+              <Text style={styles.dailyBannerTitle}>
+                Day {streakStatus.nextClaimDay} Daily Reward Ready
+              </Text>
+              <Text style={styles.dailyBannerSub}>
+                Claim +{streakStatus.nextRewardCoins} free coins
+              </Text>
+            </View>
+          </View>
+          <View style={styles.claimPill}>
+            <Text style={styles.claimPillText}>CLAIM</Text>
+          </View>
+        </Pressable>
+      ) : null}
+
+      <InstallPwaBanner />
+
       <MadeByKuboFooter variant="full" />
 
       <DailyRewardModal
@@ -392,10 +664,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   container: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 32,
-    gap: 16,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 28,
+    gap: 12,
     maxWidth: 460,
     width: '100%',
     alignSelf: 'center',
@@ -404,19 +676,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
   },
   brandRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+  },
+  brandTextWrap: {
+    flex: 1,
   },
   miniLogoFrame: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
     padding: 6,
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   miniLogoGrid: {
     flex: 1,
@@ -425,52 +702,191 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   miniTile: {
-    width: 13,
-    height: 13,
+    width: 12,
+    height: 12,
     borderRadius: 3,
     backgroundColor: COLORS.tileFace,
   },
+  miniTileGold: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    backgroundColor: COLORS.gold,
+  },
   miniBlank: {
-    width: 13,
-    height: 13,
+    width: 12,
+    height: 12,
     borderRadius: 3,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   brandTitle: {
     color: COLORS.textPrimary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: -0.6,
+    letterSpacing: -0.5,
   },
   brandTagline: {
     color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderRadius: 16,
+    padding: 12,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(16, 185, 129, 0.55)',
+  },
+  resumeThumb: {
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.success,
+  },
+  resumeIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resumeTextWrap: {
+    flex: 1,
+    gap: 1,
+  },
+  resumeEyebrow: {
+    color: '#6EE7B7',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  resumeTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  resumeMeta: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  resumePill: {
+    backgroundColor: COLORS.success,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  resumePillText: {
+    color: '#064E3B',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  primaryStack: {
+    gap: 10,
+  },
+  primaryCta: {
+    minHeight: 58,
+    borderRadius: 16,
+    backgroundColor: COLORS.gold,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  ctaTextGroup: {
+    alignItems: 'flex-start',
+  },
+  primaryCtaText: {
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  primaryCtaSub: {
+    color: '#451A03',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  photoCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 13,
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(245, 158, 11, 0.42)',
+  },
+  featureIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  featureTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  featureSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+  },
   heroCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 18,
-    gap: 14,
+    borderRadius: 18,
+    padding: 14,
+    gap: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  boardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionEyebrow: {
     color: COLORS.textMuted,
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.1,
+    letterSpacing: 1,
+  },
+  playSizeLink: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: COLORS.surfaceElevated,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  playSizeLinkText: {
+    color: COLORS.gold,
+    fontSize: 12,
+    fontWeight: '800',
   },
   gridRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   gridOption: {
     flex: 1,
     backgroundColor: COLORS.surfaceElevated,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: COLORS.border,
@@ -489,7 +905,7 @@ const styles = StyleSheet.create({
   },
   gridOptionTitle: {
     color: COLORS.textPrimary,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
   },
   gridOptionTitleActive: {
@@ -499,7 +915,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 11,
     fontWeight: '700',
-    marginTop: 2,
+    marginTop: 1,
   },
   gridOptionSubActive: {
     color: '#FDE68A',
@@ -508,7 +924,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 2,
   },
   framePickerLabel: {
     color: COLORS.textSecondary,
@@ -532,87 +947,39 @@ const styles = StyleSheet.create({
     borderColor: COLORS.textPrimary,
     transform: [{ scale: 1.12 }],
   },
-  primaryCta: {
-    height: 54,
-    borderRadius: 14,
-    backgroundColor: COLORS.gold,
+  warningCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    marginTop: 4,
-  },
-  primaryCtaText: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  featureCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: 18,
-    padding: 16,
-    gap: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
   },
-  photoCard: {
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-  },
-  featureIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureTextWrap: {
+  warningText: {
     flex: 1,
-    gap: 3,
-  },
-  featureTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  featureSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  dualRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfCard: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  halfCardTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  halfCardSub: {
-    color: COLORS.textSecondary,
+    color: '#FDE68A',
     fontSize: 12,
   },
   librarySection: {
-    gap: 10,
+    gap: 8,
+  },
+  libraryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  libraryCount: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
   },
   libraryList: {
-    gap: 12,
+    gap: 10,
   },
   customThumbCard: {
-    width: 124,
+    width: 118,
     backgroundColor: COLORS.surface,
     borderRadius: 14,
     overflow: 'hidden',
@@ -620,8 +987,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   customThumbImg: {
-    width: 124,
-    height: 124,
+    width: 118,
+    height: 118,
   },
   customThumbMeta: {
     padding: 8,
@@ -641,20 +1008,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
   },
-  pressedScale: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
+  dualRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  halfCard: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 14,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  halfCardTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  halfCardSub: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
   },
   dailyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
     borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(245, 158, 11, 0.55)',
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.45)',
   },
   dailyBannerLeft: {
     flexDirection: 'row',
@@ -681,5 +1067,9 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 11,
     fontWeight: '900',
+  },
+  pressedScale: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.92,
   },
 });

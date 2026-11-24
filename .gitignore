@@ -28,6 +28,9 @@ yarn-error.*
 .env.local
 .env.*.local
 
+# Supabase CLI temp metadata
+supabase/.temp/
+
 # OS
 .DS_Store
 Thumbs.db

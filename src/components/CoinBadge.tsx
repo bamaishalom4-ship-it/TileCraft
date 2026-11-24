@@ -5,36 +5,54 @@ import { COLORS } from '../theme/tokens';
 
 interface CoinBadgeProps {
   coins: number;
+  loading?: boolean;
   onPress?: () => void;
   showPlus?: boolean;
 }
 
 /**
- * Reusable header Coin pill displaying the player's current coin balance.
- * Tapping opens the Shop screen.
+ * Reusable header Coin pill displaying the player's coin balance.
+ * Shows a subtle placeholder while wallet hydration is in progress so defaults never flash.
  */
 export const CoinBadge: React.FC<CoinBadgeProps> = ({
   coins,
+  loading = false,
   onPress,
   showPlus = true,
 }) => {
+  const displayValue = loading ? '…' : coins.toLocaleString();
+
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? 'button' : 'text'}
-      accessibilityLabel={`${coins} coins`}
+      accessibilityLabel={
+        loading
+          ? 'Loading coin balance'
+          : onPress
+          ? `${coins} coins. Open Shop`
+          : `${coins} coins`
+      }
       style={({ pressed }) => [
         styles.pill,
         pressed && onPress && styles.pillPressed,
       ]}
     >
-      <View style={styles.coinIcon}>
+      <View
+        style={styles.coinIcon}
+        importantForAccessibility="no-hide-descendants"
+        accessibilityElementsHidden
+      >
         <Text style={styles.coinSymbol}>¢</Text>
       </View>
-      <Text style={styles.coinCount}>{coins.toLocaleString()}</Text>
+      <Text style={styles.coinCount}>{displayValue}</Text>
       {showPlus && onPress ? (
-        <View style={styles.plusWrap}>
+        <View
+          style={styles.plusWrap}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+        >
           <Ionicons name="add" size={14} color="#111827" />
         </View>
       ) : null}
@@ -77,6 +95,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
+    minWidth: 24,
+    textAlign: 'center',
   },
   plusWrap: {
     width: 18,

@@ -11,6 +11,7 @@ import {
   computeManhattanDistance,
   createSolvedBoard,
   generateSolvableBoard,
+  getTileIndexForArrowKey,
   isSolved,
   slideTile,
 } from '../puzzleEngine';
@@ -125,6 +126,29 @@ describe('Sliding Mechanics (Single & Multi-Tile Line Push)', () => {
     const result = slideTile(solved3, 4, 3); // center tile when blank is bottom-right
     assert.equal(result.moved, false);
     assert.deepEqual(result.board, solved3);
+  });
+
+  it('maps arrow keys to sliding the adjacent tile INTO the gap in that direction', () => {
+    // 3x3 board with blank at center (index 4: row 1, col 1)
+    // [1, 2, 3,
+    //  4, 0, 6,
+    //  7, 5, 8]
+    const centerBlank = [1, 2, 3, 4, 0, 6, 7, 5, 8];
+    // ArrowUp slides tile below blank (index 7, value 5) upward
+    assert.equal(getTileIndexForArrowKey(centerBlank, 3, 'up'), 7);
+    // ArrowDown slides tile above blank (index 1, value 2) downward
+    assert.equal(getTileIndexForArrowKey(centerBlank, 3, 'down'), 1);
+    // ArrowLeft slides tile right of blank (index 5, value 6) leftward
+    assert.equal(getTileIndexForArrowKey(centerBlank, 3, 'left'), 5);
+    // ArrowRight slides tile left of blank (index 3, value 4) rightward
+    assert.equal(getTileIndexForArrowKey(centerBlank, 3, 'right'), 3);
+
+    // At bottom-right corner (index 8), ArrowUp and ArrowLeft have no tile to slide
+    const cornerBlank = createSolvedBoard(3);
+    assert.equal(getTileIndexForArrowKey(cornerBlank, 3, 'up'), null);
+    assert.equal(getTileIndexForArrowKey(cornerBlank, 3, 'left'), null);
+    assert.equal(getTileIndexForArrowKey(cornerBlank, 3, 'down'), 5);
+    assert.equal(getTileIndexForArrowKey(cornerBlank, 3, 'right'), 7);
   });
 });
 

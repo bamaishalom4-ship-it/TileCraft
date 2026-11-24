@@ -3,19 +3,20 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
 import { usePuzzleStore } from '../store/usePuzzleStore';
+import { showAppDialog } from '../store/useDialogStore';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { isAnonymousSignInAvailable, getExistingSessionUserId } from '../services/supabaseClient';
 import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
 import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { formatElapsedTime } from '../hooks/usePuzzleTimer';
 import { COLORS } from '../theme/tokens';
 
 /**
- * Celebratory Win Screen displaying:
- * - Completed un-sliced custom image (or trophy badge for classic mode)
- * - 1–3 Star rating based on move efficiency & time
- * - Coin reward credited to player balance
- * - Quick actions: Play Again, Publish to Marketplace, Main Menu
+ * Celebratory Win Screen displaying completion stats, idempotent coin reward,
+ * Play Again, and optional explicit public upload for private photo puzzles.
  */
 export const WinScreen: React.FC = () => {
+  const isOnline = useOnlineStatus();
   const [publishOpen, setPublishOpen] = useState(false);
   const summary = useAppStore((s) => s.lastWinSummary);
   const coins = useAppStore((s) => s.coins);
@@ -31,41 +32,83 @@ export const WinScreen: React.FC = () => {
     navigate('game');
   };
 
+  const handlePublishTap = async () => {
+    if (!isOnline) {
+      showAppDialog({
+        title: 'Offline',
+        message:
+          'Connect to the internet to publish this photo publicly. It remains saved privately on your device.',
+      });
+      return;
+    }
+
+    const [sessionUid, anonAllowed] = await Promise.all([
+      getExistingSessionUserId(),
+      isAnonymousSignInAvailable(),
+    ]);
+
+    if (!sessionUid && !anonAllowed) {
+      showAppDialog({
+        title: 'Publishing Unavailable',
+        message:
+          'Public publishing requires player sign-in to be enabled on the backend. Your photo stays saved privately on your device.',
+      });
+      return;
+    }
+
+    setPublishOpen(true);
+  };
+
   return (
     <View style={styles.screen}>
-      {/* Star Rating Header */}
-      <View style={styles.starsRow}>
+      <View
+        style={styles.starsRow}
+        accessibilityLabel={`${summary.stars} out of 3 stars`}
+      >
         {[1, 2, 3].map((starIndex) => {
           const earned = starIndex <= summary.stars;
           return (
-            <Ionicons
+            <View
               key={starIndex}
-              name={earned ? 'star' : 'star-outline'}
-              size={starIndex === 2 ? 48 : 36}
-              color={earned ? COLORS.gold : COLORS.textMuted}
-              style={starIndex === 2 ? styles.centerStar : undefined}
-            />
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <Ionicons
+                name={earned ? 'star' : 'star-outline'}
+                size={starIndex === 2 ? 48 : 36}
+                color={earned ? COLORS.gold : COLORS.textMuted}
+                style={starIndex === 2 ? styles.centerStar : undefined}
+              />
+            </View>
           );
         })}
       </View>
 
-      <Text style={styles.heading}>Puzzle Solved!</Text>
+      <Text style={styles.heading} accessibilityRole="header">
+        Puzzle Solved!
+      </Text>
       <Text style={styles.subheading}>
         {summary.puzzleTitle} · {summary.gridSize}×{summary.gridSize}
       </Text>
 
-      {/* Completed Full Image Preview (for custom puzzles) */}
       {summary.imageUri ? (
         <View style={styles.imageFrame}>
-          <Image source={{ uri: summary.imageUri }} style={styles.completedImage} />
+          <Image
+            source={{ uri: summary.imageUri }}
+            style={styles.completedImage}
+            accessibilityLabel={`Completed ${summary.puzzleTitle} image`}
+          />
         </View>
       ) : (
-        <View style={styles.trophyCircle}>
+        <View
+          style={styles.trophyCircle}
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+        >
           <Ionicons name="trophy" size={56} color={COLORS.gold} />
         </View>
       )}
 
-      {/* Telemetry & Reward Card */}
       <View style={styles.rewardCard}>
         <View style={styles.metricCol}>
           <Text style={styles.metricLabel}>MOVES</Text>
@@ -91,43 +134,58 @@ export const WinScreen: React.FC = () => {
         New Balance: {coins.toLocaleString()} coins
       </Text>
 
-      {/* Action Buttons */}
       <View style={styles.actions}>
         <Pressable
           onPress={handlePlayAgain}
+          accessibilityRole="button"
+          accessibilityLabel="Play again"
           style={({ pressed }) => [
             styles.primaryBtn,
             pressed && styles.pressed,
           ]}
         >
-          <Ionicons name="refresh" size={18} color="#111827" />
+          <View
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
+            <Ionicons name="refresh" size={18} color="#111827" />
+          </View>
           <Text style={styles.primaryBtnText}>Play Again</Text>
         </Pressable>
 
         {summary.isCustomPuzzle && summary.imageUri ? (
           <Pressable
-            onPress={() => setPublishOpen(true)}
+            onPress={handlePublishTap}
+            accessibilityRole="button"
+            accessibilityLabel="Publish this private photo puzzle to Marketplace"
             style={({ pressed }) => [
               styles.secondaryBtn,
               styles.publishBtn,
               pressed && styles.pressed,
             ]}
           >
-            <Ionicons name="cloud-upload-outline" size={18} color="#38BDF8" />
+            <View
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <Ionicons name="cloud-upload-outline" size={18} color="#38BDF8" />
+            </View>
             <Text style={[styles.secondaryBtnText, { color: '#38BDF8' }]}>
-              Publish to Marketplace
+              Share to Marketplace
             </Text>
           </Pressable>
         ) : null}
 
         <Pressable
           onPress={() => navigate('menu')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
           style={({ pressed }) => [
             styles.secondaryBtn,
             pressed && styles.pressed,
           ]}
         >
-          <Text style={styles.secondaryBtnText}>Back to Main Menu</Text>
+          <Text style={styles.secondaryBtnText}>Back to Home</Text>
         </Pressable>
       </View>
 
@@ -153,7 +211,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 22,
-    gap: 14,
+    gap: 12,
   },
   starsRow: {
     flexDirection: 'row',
@@ -165,7 +223,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: COLORS.textPrimary,
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '900',
     letterSpacing: -0.6,
   },
@@ -183,14 +241,14 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   completedImage: {
-    width: 196,
-    height: 196,
+    width: 184,
+    height: 184,
     borderRadius: 14,
   },
   trophyCircle: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     backgroundColor: 'rgba(245, 158, 11, 0.14)',
     borderWidth: 2,
     borderColor: 'rgba(245, 158, 11, 0.45)',
@@ -204,7 +262,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.surface,
     borderRadius: 18,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -238,10 +296,10 @@ const styles = StyleSheet.create({
   actions: {
     width: '100%',
     gap: 10,
-    marginTop: 6,
+    marginTop: 4,
   },
   primaryBtn: {
-    height: 54,
+    height: 52,
     borderRadius: 14,
     backgroundColor: COLORS.gold,
     flexDirection: 'row',
@@ -255,7 +313,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   secondaryBtn: {
-    height: 48,
+    height: 46,
     borderRadius: 14,
     backgroundColor: COLORS.surface,
     borderWidth: 1,

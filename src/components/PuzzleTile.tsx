@@ -18,7 +18,9 @@ interface PuzzleTileProps {
   cellSize: number;
   tileGap: number;
   boardInnerSize: number;
+  isMovable: boolean;
   isHinted: boolean;
+  isIntroSuggested: boolean;
   hintDirection: MoveDirection | null;
   isSolvedBoard: boolean;
   imageUri: string | null;
@@ -34,12 +36,8 @@ const DIRECTION_ARROWS: Record<MoveDirection, string> = {
 };
 
 /**
- * Individual tactile sliding tile.
- * Keyed by `tileValue` (1..N*N-1) so its Animated transform smoothly springs
- * to its new (row, col) slot whenever the board state updates.
- *
- * Also supports rendering a cropped 1/N × 1/N viewport of a custom square image
- * (ready for Phase 2 gallery picker & UGC marketplace puzzles).
+ * Individual tactile sliding tile with smooth spring transitions,
+ * first-move tutorial highlight, A* hint pulse, and full accessibility semantics.
  */
 export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
   ({
@@ -49,7 +47,9 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
     cellSize,
     tileGap,
     boardInnerSize,
+    isMovable,
     isHinted,
+    isIntroSuggested,
     hintDirection,
     isSolvedBoard,
     imageUri,
@@ -62,10 +62,9 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
 
     const translateX = useRef(new Animated.Value(targetX)).current;
     const translateY = useRef(new Animated.Value(targetY)).current;
-    const hintPulse = useRef(new Animated.Value(1)).current;
+    const pulse = useRef(new Animated.Value(1)).current;
     const isFirstMount = useRef(true);
 
-    // Smoothly spring tile to its new slot whenever index or layout size changes
     useEffect(() => {
       if (isFirstMount.current) {
         isFirstMount.current = false;
@@ -90,35 +89,46 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
       ]).start();
     }, [targetX, targetY, translateX, translateY]);
 
-    // Subtle breathing animation when this tile is highlighted by a Hint
+    const highlighted = isHinted || isIntroSuggested;
+
     useEffect(() => {
-      if (!isHinted) {
-        hintPulse.setValue(1);
+      if (!highlighted) {
+        pulse.setValue(1);
         return;
       }
 
       const loop = Animated.loop(
         Animated.sequence([
-          Animated.timing(hintPulse, {
+          Animated.timing(pulse, {
             toValue: 0.94,
-            duration: 380,
+            duration: 420,
             useNativeDriver: true,
           }),
-          Animated.timing(hintPulse, {
+          Animated.timing(pulse, {
             toValue: 1,
-            duration: 380,
+            duration: 420,
             useNativeDriver: true,
           }),
         ])
       );
       loop.start();
       return () => loop.stop();
-    }, [isHinted, hintPulse]);
+    }, [highlighted, pulse]);
 
     const tileRenderSize = cellSize - tileGap;
     const isInCorrectSlot = currentIndex === tileValue - 1;
     const targetPos = getTileTargetPosition(tileValue, gridSize);
     const fontSize = gridSize === 3 ? 34 : gridSize === 4 ? 26 : 20;
+
+    const accessibilityLabel = `Tile ${tileValue}, row ${row + 1} column ${col + 1}${
+      isHinted
+        ? ', recommended hint move'
+        : isIntroSuggested
+        ? ', suggested first move'
+        : isMovable
+        ? ', movable'
+        : ''
+    }${isInCorrectSlot ? ', in correct position' : ''}`;
 
     return (
       <Animated.View
@@ -128,18 +138,15 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
             width: cellSize,
             height: cellSize,
             padding: tileGap / 2,
-            transform: [
-              { translateX },
-              { translateY },
-              { scale: hintPulse },
-            ],
+            transform: [{ translateX }, { translateY }, { scale: pulse }],
           },
         ]}
       >
         <Pressable
           onPress={() => onPress(currentIndex)}
           accessibilityRole="button"
-          accessibilityLabel={`Tile ${tileValue}`}
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ disabled: !isMovable || isSolvedBoard }}
           style={({ pressed }) => [
             styles.tileFace,
             {
@@ -148,23 +155,25 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
               borderRadius: gridSize === 5 ? 7 : 10,
               backgroundColor: isHinted
                 ? COLORS.tileHintBg
+                : isIntroSuggested && !imageUri
+                ? '#FEF9C3'
                 : isInCorrectSlot && !imageUri
                 ? COLORS.tileCorrectBg
                 : COLORS.tileFace,
               borderColor: isHinted
                 ? COLORS.tileHintBorder
+                : isIntroSuggested
+                ? '#38BDF8'
                 : isSolvedBoard
                 ? COLORS.tileCorrectBorder
                 : COLORS.tileShadow,
-              borderWidth: isHinted ? 2.5 : 1.5,
+              borderWidth: highlighted ? 2.5 : 1.5,
               opacity: pressed ? 0.92 : 1,
             },
           ]}
         >
-          {/* Specular top-left bevel highlight mimicking molded ivory plastic tiles */}
           <View style={styles.bevelHighlight} pointerEvents="none" />
 
-          {/* Phase 2+ Custom/UGC Square Image Slice */}
           {imageUri ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               <Image
@@ -182,7 +191,6 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
             </View>
           ) : null}
 
-          {/* Number label (always visible in classic mode; optional badge in photo mode) */}
           {(!imageUri || showTileNumbers) && (
             <View style={imageUri ? styles.photoBadge : undefined}>
               <Text
@@ -199,12 +207,16 @@ export const PuzzleTile: React.FC<PuzzleTileProps> = React.memo(
             </View>
           )}
 
-          {/* Subtle green indicator dot when tile is resting in its solved slot */}
-          {isInCorrectSlot && !isHinted && !imageUri && (
+          {isInCorrectSlot && !highlighted && !imageUri && (
             <View style={styles.correctDot} />
           )}
 
-          {/* Directional hint badge */}
+          {isIntroSuggested && !isHinted && (
+            <View style={styles.tryBadge}>
+              <Text style={styles.tryBadgeText}>TAP</Text>
+            </View>
+          )}
+
           {isHinted && hintDirection && (
             <View style={styles.hintArrowBadge}>
               <Text style={styles.hintArrowText}>
@@ -267,6 +279,21 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: COLORS.success,
+  },
+  tryBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#38BDF8',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tryBadgeText: {
+    color: '#082F49',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   hintArrowBadge: {
     position: 'absolute',

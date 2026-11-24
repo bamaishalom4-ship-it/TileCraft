@@ -9,7 +9,7 @@
     "web": "expo start --web",
     "build:pwa": "expo export --platform web --output-dir dist && node scripts/inject-pwa-head.mjs",
     "typecheck": "tsc --noEmit",
-    "test:engine": "node --import ./scripts/ts-resolve.mjs --test src/engine/__tests__/puzzleEngine.test.ts src/utils/__tests__/imageCropUtils.test.ts src/utils/__tests__/marketplaceUtils.test.ts src/utils/__tests__/economyUtils.test.ts"
+    "test:engine": "node --import ./scripts/ts-resolve.mjs --test src/engine/__tests__/puzzleEngine.test.ts src/utils/__tests__/imageCropUtils.test.ts src/utils/__tests__/marketplaceUtils.test.ts src/utils/__tests__/economyUtils.test.ts src/services/__tests__/activeGameStorage.test.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",

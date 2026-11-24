@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +20,7 @@ import {
 } from '../types/marketplace';
 import { publishPuzzleToMarketplace } from '../services/marketplaceService';
 import { calculateCreatorRoyalty } from '../utils/marketplaceUtils';
+import { showAppDialog } from '../store/useDialogStore';
 import { COLORS } from '../theme/tokens';
 
 const PRICE_PRESETS = [0, 15, 25, 50];
@@ -34,9 +35,8 @@ interface PublishPuzzleModalProps {
 }
 
 /**
- * Modal for publishing a cropped 1:1 custom image to the Supabase UGC Marketplace.
- * Enforces SFW pledge, validates title safety, uploads to Storage, and invokes the
- * automated NSFW moderation Edge Function.
+ * Explicit public-upload modal for sharing a private local photo puzzle
+ * to the public Marketplace. Requires deliberate confirmation before uploading.
  */
 export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
   visible,
@@ -50,19 +50,48 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
   const [category, setCategory] = useState<PuzzleCategory>('Art');
   const [gridSize, setGridSize] = useState<GridSize>(initialGridSize);
   const [coinPrice, setCoinPrice] = useState<number>(25);
-  const [agreedSfw, setAgreedSfw] = useState(false);
+  const [confirmedPublic, setConfirmedPublic] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setTitle(initialTitle);
+    setGridSize(initialGridSize);
+    setConfirmedPublic(false);
+  }, [initialTitle, initialGridSize, visible]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (visible) {
+      previousFocusRef.current = document.activeElement as HTMLElement | null;
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && !submitting) {
+          e.preventDefault();
+          onClose();
+        }
+      };
+      window.addEventListener('keydown', onKeyDown);
+      return () => window.removeEventListener('keydown', onKeyDown);
+    } else if (previousFocusRef.current) {
+      const el = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (typeof el.focus === 'function' && document.contains(el)) {
+        setTimeout(() => el.focus(), 0);
+      }
+    }
+  }, [visible, submitting, onClose]);
 
   if (!localImageUri) return null;
 
   const royalty = calculateCreatorRoyalty(coinPrice);
 
   const handlePublish = async () => {
-    if (!agreedSfw) {
-      Alert.alert(
-        'Community Guidelines Required',
-        'Please confirm that your puzzle image is SFW and safe for all players.'
-      );
+    if (!confirmedPublic) {
+      showAppDialog({
+        title: 'Confirmation Required',
+        message:
+          'Please confirm that you want to upload this photo publicly and that it follows our safe-for-work guidelines.',
+      });
       return;
     }
 
@@ -77,7 +106,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
       });
 
       if (!result.ok) {
-        Alert.alert('Upload Blocked', result.message);
+        showAppDialog({ title: 'Upload Not Completed', message: result.message });
         return;
       }
 
@@ -85,18 +114,23 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
         onPublished(result.puzzle);
       }
 
-      Alert.alert(
-        result.moderationStatus === 'approved'
-          ? 'Published Live!'
-          : 'Submitted for Review',
-        result.message,
-        [{ text: 'Awesome', onPress: onClose }]
-      );
+      onClose();
+      showAppDialog({
+        title:
+          result.moderationStatus === 'approved'
+            ? 'Published Live!'
+            : 'Submitted for Review',
+        message: result.message,
+        actions: [{ label: 'Done', style: 'primary' }],
+      });
     } catch (err) {
-      Alert.alert(
-        'Upload Error',
-        err instanceof Error ? err.message : 'Unable to upload puzzle right now.'
-      );
+      showAppDialog({
+        title: 'Upload Error',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Unable to upload puzzle right now.',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -107,13 +141,21 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (!submitting) onClose();
+      }}
     >
-      <View style={styles.backdrop}>
+      <View style={styles.backdrop} accessibilityViewIsModal>
         <View style={styles.sheet}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Publish to Marketplace</Text>
-            <Pressable onPress={onClose} disabled={submitting} style={styles.closeBtn}>
+            <Pressable
+              onPress={onClose}
+              disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Close publish dialog"
+              style={styles.closeBtn}
+            >
               <Ionicons name="close" size={20} color={COLORS.textPrimary} />
             </Pressable>
           </View>
@@ -122,7 +164,13 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
             contentContainerStyle={styles.body}
             showsVerticalScrollIndicator={false}
           >
-            {/* Preview + Title */}
+            <View style={styles.privacyCallout}>
+              <Ionicons name="globe-outline" size={16} color="#38BDF8" />
+              <Text style={styles.privacyCalloutText}>
+                Private photo puzzles stay on your device. Publishing uploads a copy publicly for other players.
+              </Text>
+            </View>
+
             <View style={styles.topPreview}>
               <Image source={{ uri: localImageUri }} style={styles.thumb} />
               <View style={styles.titleInputWrap}>
@@ -132,6 +180,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
                   onChangeText={setTitle}
                   placeholder="Enter a catchy title..."
                   placeholderTextColor={COLORS.textMuted}
+                  accessibilityLabel="Puzzle title"
                   maxLength={40}
                   style={styles.input}
                 />
@@ -143,7 +192,6 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               </View>
             </View>
 
-            {/* Category Selector */}
             <Text style={styles.label}>CATEGORY</Text>
             <View style={styles.chipWrap}>
               {PUZZLE_CATEGORIES.map((cat) => {
@@ -152,6 +200,9 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
                   <Pressable
                     key={cat}
                     onPress={() => setCategory(cat)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Category ${cat}`}
+                    accessibilityState={{ selected: active }}
                     style={[styles.chip, active && styles.chipActive]}
                   >
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>
@@ -162,7 +213,6 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               })}
             </View>
 
-            {/* Recommended Grid Size */}
             <Text style={styles.label}>RECOMMENDED GRID</Text>
             <View style={styles.row}>
               {([3, 4, 5] as GridSize[]).map((size) => {
@@ -171,6 +221,9 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
                   <Pressable
                     key={size}
                     onPress={() => setGridSize(size)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${size} by ${size} grid`}
+                    accessibilityState={{ selected: active }}
                     style={[styles.optionPill, active && styles.optionPillActive]}
                   >
                     <Text
@@ -186,7 +239,6 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               })}
             </View>
 
-            {/* Coin Price */}
             <Text style={styles.label}>DOWNLOAD PRICE</Text>
             <View style={styles.row}>
               {PRICE_PRESETS.map((price) => {
@@ -195,6 +247,9 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
                   <Pressable
                     key={price}
                     onPress={() => setCoinPrice(price)}
+                    accessibilityRole="button"
+                    accessibilityLabel={price === 0 ? 'Free' : `${price} coins`}
+                    accessibilityState={{ selected: active }}
                     style={[styles.optionPill, active && styles.optionPillActive]}
                   >
                     <Text
@@ -210,27 +265,31 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               })}
             </View>
 
-            {/* SFW Safety Pledge */}
             <Pressable
-              onPress={() => setAgreedSfw((prev) => !prev)}
+              onPress={() => setConfirmedPublic((prev) => !prev)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: confirmedPublic }}
+              accessibilityLabel="Confirm public upload and safe-for-work guidelines"
               style={styles.pledgeRow}
             >
               <Ionicons
-                name={agreedSfw ? 'checkbox' : 'square-outline'}
+                name={confirmedPublic ? 'checkbox' : 'square-outline'}
                 size={22}
-                color={agreedSfw ? COLORS.gold : COLORS.textMuted}
+                color={confirmedPublic ? COLORS.gold : COLORS.textMuted}
               />
               <Text style={styles.pledgeText}>
-                I confirm this image contains no NSFW, violent, or offensive content. All uploads are scanned by automated moderation.
+                I understand this photo will be uploaded publicly for other players, contains no NSFW or private content, and will be scanned by moderation.
               </Text>
             </Pressable>
 
             <Pressable
               onPress={handlePublish}
               disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Upload publicly and run safety scan"
               style={({ pressed }) => [
                 styles.submitBtn,
-                !agreedSfw && styles.submitBtnMuted,
+                !confirmedPublic && styles.submitBtnMuted,
                 pressed && styles.pressed,
               ]}
             >
@@ -242,7 +301,7 @@ export const PublishPuzzleModal: React.FC<PublishPuzzleModalProps> = ({
               ) : (
                 <>
                   <Ionicons name="cloud-upload" size={18} color="#111827" />
-                  <Text style={styles.submitText}>Upload & Run Safety Scan</Text>
+                  <Text style={styles.submitText}>Publish Publicly</Text>
                 </>
               )}
             </Pressable>
@@ -293,6 +352,22 @@ const styles = StyleSheet.create({
   body: {
     padding: 18,
     gap: 12,
+  },
+  privacyCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  privacyCalloutText: {
+    flex: 1,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
   },
   topPreview: {
     flexDirection: 'row',

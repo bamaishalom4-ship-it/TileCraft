@@ -13,6 +13,7 @@ import {
 } from './localWalletDb';
 import {
   ensureAuthenticatedUser,
+  getExistingSessionUserId,
   getSupabaseClient,
   isSupabaseConfigured,
 } from './supabaseClient';
@@ -46,8 +47,11 @@ export async function hydrateAndSyncEconomy(): Promise<HydratedEconomy> {
 
   try {
     const supabase = getSupabaseClient()!;
-    const auth = await ensureAuthenticatedUser();
-    if (!auth) return { wallet, transactions, syncedWithCloud };
+    // Only sync with cloud on boot if a session already exists (avoids background 422 signup spam)
+    const existingUserId = await getExistingSessionUserId();
+    if (!existingUserId) {
+      return { wallet, transactions, syncedWithCloud };
+    }
 
     const [{ data: profile }, { data: remoteTxs }] = await Promise.all([
       supabase
@@ -55,12 +59,12 @@ export async function hydrateAndSyncEconomy(): Promise<HydratedEconomy> {
         .select(
           'coins, unlocked_grid_sizes, unlocked_all_frames, daily_streak, last_daily_claim_at'
         )
-        .eq('id', auth.userId)
+        .eq('id', existingUserId)
         .single(),
       supabase
         .from('coin_transactions')
         .select('id, delta, balance_after, tx_type, reference_id, created_at')
-        .eq('user_id', auth.userId)
+        .eq('user_id', existingUserId)
         .order('created_at', { ascending: false })
         .limit(30),
     ]);
@@ -152,44 +156,46 @@ export async function claimDailyLoginReward(
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient()!;
-      await ensureAuthenticatedUser();
-      const { data, error } = await supabase.rpc('claim_daily_login_reward');
+      const auth = await ensureAuthenticatedUser();
+      if (auth.ok) {
+        const { data, error } = await supabase.rpc('claim_daily_login_reward');
 
-      if (!error && data) {
-        if (!data.ok) {
-          return {
-            ok: false,
-            coinsAwarded: 0,
-            wallet: {
-              ...currentWallet,
-              coins: Number(data.newBalance ?? currentWallet.coins),
-              dailyStreak: Number(data.streak ?? currentWallet.dailyStreak),
-              lastDailyClaimDate: today,
-            },
-            error: data.error ?? 'Already claimed today.',
+        if (!error && data) {
+          if (!data.ok) {
+            return {
+              ok: false,
+              coinsAwarded: 0,
+              wallet: {
+                ...currentWallet,
+                coins: Number(data.newBalance ?? currentWallet.coins),
+                dailyStreak: Number(data.streak ?? currentWallet.dailyStreak),
+                lastDailyClaimDate: today,
+              },
+              error: data.error ?? 'Already claimed today.',
+            };
+          }
+
+          const nextWallet: LocalWalletSnapshot = {
+            ...currentWallet,
+            coins: Number(data.newBalance),
+            dailyStreak: Number(data.streak),
+            lastDailyClaimDate: today,
+            updatedAt: new Date().toISOString(),
           };
+
+          const { tx } = await recordLocalAndPersist(nextWallet, {
+            delta: Number(data.coinsAwarded),
+            balanceAfter: nextWallet.coins,
+            txType: 'daily_reward',
+            referenceId: today,
+            synced: true,
+          });
+
+          return { ok: true, coinsAwarded: Number(data.coinsAwarded), wallet: nextWallet, tx };
         }
-
-        const nextWallet: LocalWalletSnapshot = {
-          ...currentWallet,
-          coins: Number(data.newBalance),
-          dailyStreak: Number(data.streak),
-          lastDailyClaimDate: today,
-          updatedAt: new Date().toISOString(),
-        };
-
-        const { tx } = await recordLocalAndPersist(nextWallet, {
-          delta: Number(data.coinsAwarded),
-          balanceAfter: nextWallet.coins,
-          txType: 'daily_reward',
-          referenceId: today,
-          synced: true,
-        });
-
-        return { ok: true, coinsAwarded: Number(data.coinsAwarded), wallet: nextWallet, tx };
       }
     } catch {
-      // Fallback to local SQLite grant if offline
+      // Fallback to local grant if offline
     }
   }
 
@@ -252,49 +258,51 @@ export async function watchRewardedAdForCoins(
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient()!;
-      await ensureAuthenticatedUser();
-      const { data, error } = await supabase.rpc('grant_rewarded_ad_coins', {
-        p_ad_session_id: adOutcome.adSessionId,
-      });
-
-      if (!error && data) {
-        if (!data.ok) {
-          return {
-            ok: false,
-            coinsAwarded: 0,
-            wallet: currentWallet,
-            adMode: adOutcome.mode,
-            error: data.error,
-          };
-        }
-
-        const awarded = Number(data.coinsAwarded ?? REWARDED_AD_COINS);
-        const nextWallet: LocalWalletSnapshot = {
-          ...currentWallet,
-          coins: Number(data.newBalance),
-          rewardedAdsWatchedToday: watchedToday + 1,
-          rewardedAdsDate: today,
-          updatedAt: new Date().toISOString(),
-        };
-
-        const { tx } = await recordLocalAndPersist(nextWallet, {
-          delta: awarded,
-          balanceAfter: nextWallet.coins,
-          txType: 'rewarded_ad',
-          referenceId: adOutcome.adSessionId,
-          synced: true,
+      const auth = await ensureAuthenticatedUser();
+      if (auth.ok) {
+        const { data, error } = await supabase.rpc('grant_rewarded_ad_coins', {
+          p_ad_session_id: adOutcome.adSessionId,
         });
 
-        return {
-          ok: true,
-          coinsAwarded: awarded,
-          wallet: nextWallet,
-          tx,
-          adMode: adOutcome.mode,
-        };
+        if (!error && data) {
+          if (!data.ok) {
+            return {
+              ok: false,
+              coinsAwarded: 0,
+              wallet: currentWallet,
+              adMode: adOutcome.mode,
+              error: data.error,
+            };
+          }
+
+          const awarded = Number(data.coinsAwarded ?? REWARDED_AD_COINS);
+          const nextWallet: LocalWalletSnapshot = {
+            ...currentWallet,
+            coins: Number(data.newBalance),
+            rewardedAdsWatchedToday: watchedToday + 1,
+            rewardedAdsDate: today,
+            updatedAt: new Date().toISOString(),
+          };
+
+          const { tx } = await recordLocalAndPersist(nextWallet, {
+            delta: awarded,
+            balanceAfter: nextWallet.coins,
+            txType: 'rewarded_ad',
+            referenceId: adOutcome.adSessionId,
+            synced: true,
+          });
+
+          return {
+            ok: true,
+            coinsAwarded: awarded,
+            wallet: nextWallet,
+            tx,
+            adMode: adOutcome.mode,
+          };
+        }
       }
     } catch {
-      // Fallback to local SQLite
+      // Fallback to local storage
     }
   }
 
@@ -344,30 +352,32 @@ export async function spendCoinsForHint(
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient()!;
-      await ensureAuthenticatedUser();
-      const { data, error } = await supabase.rpc('spend_coins', {
-        p_amount: hintCost,
-        p_tx_type: 'hint',
-        p_reference_id: refId,
-      });
-
-      if (!error && data) {
-        if (!data.ok) {
-          return { ok: false, wallet: currentWallet, error: data.error };
-        }
-        const nextWallet: LocalWalletSnapshot = {
-          ...currentWallet,
-          coins: Number(data.newBalance),
-          updatedAt: new Date().toISOString(),
-        };
-        const { tx } = await recordLocalAndPersist(nextWallet, {
-          delta: -hintCost,
-          balanceAfter: nextWallet.coins,
-          txType: 'hint',
-          referenceId: refId,
-          synced: true,
+      const auth = await ensureAuthenticatedUser();
+      if (auth.ok) {
+        const { data, error } = await supabase.rpc('spend_coins', {
+          p_amount: hintCost,
+          p_tx_type: 'hint',
+          p_reference_id: refId,
         });
-        return { ok: true, wallet: nextWallet, tx };
+
+        if (!error && data) {
+          if (!data.ok) {
+            return { ok: false, wallet: currentWallet, error: data.error };
+          }
+          const nextWallet: LocalWalletSnapshot = {
+            ...currentWallet,
+            coins: Number(data.newBalance),
+            updatedAt: new Date().toISOString(),
+          };
+          const { tx } = await recordLocalAndPersist(nextWallet, {
+            delta: -hintCost,
+            balanceAfter: nextWallet.coins,
+            txType: 'hint',
+            referenceId: refId,
+            synced: true,
+          });
+          return { ok: true, wallet: nextWallet, tx };
+        }
       }
     } catch {
       // Offline local deduction fallback
@@ -417,34 +427,36 @@ export async function unlockUpgradeSynced(
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient()!;
-      await ensureAuthenticatedUser();
-      const { data, error } = await supabase.rpc('unlock_shop_upgrade', {
-        p_upgrade_id: upgrade.id,
-      });
-
-      if (!error && data) {
-        if (!data.ok) {
-          return { ok: false, wallet: currentWallet, error: data.error };
-        }
-        const nextWallet: LocalWalletSnapshot = {
-          ...currentWallet,
-          coins: Number(data.newBalance),
-          unlockedGridSizes:
-            upgrade.id === 'unlock_5x5'
-              ? Array.from(new Set([...currentWallet.unlockedGridSizes, 5])) as GridSize[]
-              : currentWallet.unlockedGridSizes,
-          unlockedAllFrames:
-            upgrade.id === 'frame_pack' ? true : currentWallet.unlockedAllFrames,
-          updatedAt: new Date().toISOString(),
-        };
-        const { tx } = await recordLocalAndPersist(nextWallet, {
-          delta: -upgrade.coinCost,
-          balanceAfter: nextWallet.coins,
-          txType: 'upgrade_unlock',
-          referenceId: upgrade.id,
-          synced: true,
+      const auth = await ensureAuthenticatedUser();
+      if (auth.ok) {
+        const { data, error } = await supabase.rpc('unlock_shop_upgrade', {
+          p_upgrade_id: upgrade.id,
         });
-        return { ok: true, wallet: nextWallet, tx };
+
+        if (!error && data) {
+          if (!data.ok) {
+            return { ok: false, wallet: currentWallet, error: data.error };
+          }
+          const nextWallet: LocalWalletSnapshot = {
+            ...currentWallet,
+            coins: Number(data.newBalance),
+            unlockedGridSizes:
+              upgrade.id === 'unlock_5x5'
+                ? Array.from(new Set([...currentWallet.unlockedGridSizes, 5])) as GridSize[]
+                : currentWallet.unlockedGridSizes,
+            unlockedAllFrames:
+              upgrade.id === 'frame_pack' ? true : currentWallet.unlockedAllFrames,
+            updatedAt: new Date().toISOString(),
+          };
+          const { tx } = await recordLocalAndPersist(nextWallet, {
+            delta: -upgrade.coinCost,
+            balanceAfter: nextWallet.coins,
+            txType: 'upgrade_unlock',
+            referenceId: upgrade.id,
+            synced: true,
+          });
+          return { ok: true, wallet: nextWallet, tx };
+        }
       }
     } catch {
       // Offline fallback
@@ -481,34 +493,35 @@ export async function creditPuzzleWinSynced(
   currentWallet: LocalWalletSnapshot,
   gridSize: GridSize,
   stars: 1 | 2 | 3,
-  fallbackCoins: number
+  fallbackCoins: number,
+  runId: string
 ): Promise<{ wallet: LocalWalletSnapshot; tx: CoinTransaction }> {
-  const runId = `win_${gridSize}_${Date.now()}`;
-
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient()!;
-      await ensureAuthenticatedUser();
-      const { data, error } = await supabase.rpc('grant_puzzle_win_reward', {
-        p_grid_size: gridSize,
-        p_stars: stars,
-        p_run_id: runId,
-      });
-
-      if (!error && data?.ok) {
-        const awarded = Number(data.coinsAwarded ?? fallbackCoins);
-        const nextWallet: LocalWalletSnapshot = {
-          ...currentWallet,
-          coins: Number(data.newBalance),
-          updatedAt: new Date().toISOString(),
-        };
-        return await recordLocalAndPersist(nextWallet, {
-          delta: awarded,
-          balanceAfter: nextWallet.coins,
-          txType: 'puzzle_win',
-          referenceId: runId,
-          synced: true,
+      const auth = await ensureAuthenticatedUser();
+      if (auth.ok) {
+        const { data, error } = await supabase.rpc('grant_puzzle_win_reward', {
+          p_grid_size: gridSize,
+          p_stars: stars,
+          p_run_id: runId,
         });
+
+        if (!error && data?.ok) {
+          const awarded = Number(data.coinsAwarded ?? fallbackCoins);
+          const nextWallet: LocalWalletSnapshot = {
+            ...currentWallet,
+            coins: Number(data.newBalance),
+            updatedAt: new Date().toISOString(),
+          };
+          return await recordLocalAndPersist(nextWallet, {
+            delta: awarded,
+            balanceAfter: nextWallet.coins,
+            txType: 'puzzle_win',
+            referenceId: runId,
+            synced: true,
+          });
+        }
       }
     } catch {
       // Offline fallback
@@ -564,33 +577,35 @@ export async function buyCoinPackSynced(
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabaseClient()!;
-      await ensureAuthenticatedUser();
-      const { data, error } = await supabase.rpc('credit_iap_coin_pack', {
-        p_sku: pack.sku,
-        p_transaction_id: txId,
-      });
-
-      if (!error && data?.ok) {
-        const awarded = Number(data.coinsAwarded ?? totalCoins);
-        const nextWallet: LocalWalletSnapshot = {
-          ...currentWallet,
-          coins: Number(data.newBalance),
-          updatedAt: new Date().toISOString(),
-        };
-        const { tx } = await recordLocalAndPersist(nextWallet, {
-          delta: awarded,
-          balanceAfter: nextWallet.coins,
-          txType: 'iap_pack',
-          referenceId: txId,
-          synced: true,
+      const auth = await ensureAuthenticatedUser();
+      if (auth.ok) {
+        const { data, error } = await supabase.rpc('credit_iap_coin_pack', {
+          p_sku: pack.sku,
+          p_transaction_id: txId,
         });
-        return {
-          ok: true,
-          coinsAwarded: awarded,
-          wallet: nextWallet,
-          tx,
-          mode: iapOutcome.mode,
-        };
+
+        if (!error && data?.ok) {
+          const awarded = Number(data.coinsAwarded ?? totalCoins);
+          const nextWallet: LocalWalletSnapshot = {
+            ...currentWallet,
+            coins: Number(data.newBalance),
+            updatedAt: new Date().toISOString(),
+          };
+          const { tx } = await recordLocalAndPersist(nextWallet, {
+            delta: awarded,
+            balanceAfter: nextWallet.coins,
+            txType: 'iap_pack',
+            referenceId: txId,
+            synced: true,
+          });
+          return {
+            ok: true,
+            coinsAwarded: awarded,
+            wallet: nextWallet,
+            tx,
+            mode: iapOutcome.mode,
+          };
+        }
       }
     } catch {
       // Offline fallback

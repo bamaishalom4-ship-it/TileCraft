@@ -9,18 +9,18 @@ import { WinScreen } from './src/screens/WinScreen';
 import { ShopScreen } from './src/screens/ShopScreen';
 import { ImageCropperScreen } from './src/screens/ImageCropperScreen';
 import { MarketplaceScreen } from './src/screens/MarketplaceScreen';
+import { AppDialogHost } from './src/components/AppDialogHost';
 import { registerPwa } from './src/utils/pwa';
 import { COLORS } from './src/theme/tokens';
 
 function TileCraftRoot() {
   const currentScreen = useAppStore((s) => s.currentScreen);
-  const hydrateEconomy = useAppStore((s) => s.hydrateEconomy);
+  const hydrateApp = useAppStore((s) => s.hydrateApp);
 
-  // Hydrate local wallet & register offline PWA Service Worker on web
   useEffect(() => {
     registerPwa();
-    hydrateEconomy();
-  }, [hydrateEconomy]);
+    hydrateApp();
+  }, [hydrateApp]);
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -45,6 +45,7 @@ function TileCraftRoot() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
       {renderScreen()}
+      <AppDialogHost />
     </SafeAreaView>
   );
 }

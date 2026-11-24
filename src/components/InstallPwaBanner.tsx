@@ -19,6 +19,7 @@ export const InstallPwaBanner: React.FC = () => {
     canPromptNativeInstall: false,
     isIosSafariInstallable: false,
     isStandalone: true,
+    isOfflineReady: false,
   });
 
   useEffect(() => {

@@ -2,6 +2,7 @@ export interface PwaInstallState {
   canPromptNativeInstall: boolean;
   isIosSafariInstallable: boolean;
   isStandalone: boolean;
+  isOfflineReady: boolean;
 }
 
 /**
@@ -19,6 +20,7 @@ export function subscribePwaInstallState(
     canPromptNativeInstall: false,
     isIosSafariInstallable: false,
     isStandalone: true,
+    isOfflineReady: true,
   });
   return () => {};
 }

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,8 @@ import {
   SHOP_UPGRADES,
   useAppStore,
 } from '../store/useAppStore';
+import { showAppDialog } from '../store/useDialogStore';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import {
   evaluateDailyStreak,
   formatTxLabel,
@@ -28,19 +29,17 @@ import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { COLORS } from '../theme/tokens';
 
 /**
- * TileCraft Shop & Wallet Screen (Phase 4):
- * - 7-Day Daily Login Streak modal + claim status
- * - AdMob Rewarded Video Ads (+35 coins, 10/day cap)
- * - Synced Shop Upgrades (5×5 Master Grid, Retro Arcade Frames)
- * - Real-money IAP Coin Packs (RevenueCat / StoreKit / Play Billing + Sandbox fallback)
- * - Restore Purchases & Live Coin Transaction Ledger (SQLite + Supabase synced)
+ * TileCraft Shop & Wallet Screen with cross-platform accessible dialogs,
+ * offline awareness for network features, and local+cloud coin ledger.
  */
 export const ShopScreen: React.FC = () => {
+  const isOnline = useOnlineStatus();
   const [dailyModalOpen, setDailyModalOpen] = useState(false);
   const [watchingAd, setWatchingAd] = useState(false);
   const [busyPackId, setBusyPackId] = useState<string | null>(null);
   const [busyUpgradeId, setBusyUpgradeId] = useState<string | null>(null);
 
+  const economyHydrated = useAppStore((s) => s.economyHydrated);
   const coins = useAppStore((s) => s.coins);
   const syncedWithCloud = useAppStore((s) => s.syncedWithCloud);
   const dailyStreak = useAppStore((s) => s.dailyStreak);
@@ -62,19 +61,31 @@ export const ShopScreen: React.FC = () => {
   const adsRemaining = Math.max(0, MAX_REWARDED_ADS_PER_DAY - adsToday);
 
   const handleWatchAd = async () => {
+    if (!isOnline) {
+      showAppDialog({
+        title: 'Offline',
+        message:
+          'Rewarded video ads require an internet connection. Your local Classic and Photo puzzles still play offline!',
+      });
+      return;
+    }
+
     if (watchingAd) return;
     setWatchingAd(true);
     try {
       const res = await watchRewardedAd();
       if (res.ok) {
-        Alert.alert(
-          'Reward Earned!',
-          `+${res.coinsAwarded} coins credited to your wallet${
-            res.adMode === 'expo-preview' ? ' (Expo AdMob Preview Mode)' : ''
-          }.`
-        );
+        showAppDialog({
+          title: 'Reward Earned!',
+          message: `+${res.coinsAwarded} coins credited to your wallet${
+            res.adMode === 'expo-preview' ? ' (Preview Mode)' : ''
+          }.`,
+        });
       } else {
-        Alert.alert('Ad Unavailable', res.error ?? 'Could not complete rewarded ad.');
+        showAppDialog({
+          title: 'Ad Unavailable',
+          message: res.error ?? 'Could not complete rewarded ad.',
+        });
       }
     } finally {
       setWatchingAd(false);
@@ -91,14 +102,18 @@ export const ShopScreen: React.FC = () => {
     try {
       const res = await buyUpgrade(id);
       if (res.ok) {
-        Alert.alert('Unlocked!', `${title} is now active and synced to your account.`);
+        showAppDialog({
+          title: 'Unlocked!',
+          message: `${title} is now active across TileCraft.`,
+        });
       } else {
-        Alert.alert(
-          'Unable to Unlock',
-          res.error === 'Not enough coins'
-            ? `You need ${cost} coins to unlock ${title}.`
-            : res.error ?? 'Could not unlock upgrade.'
-        );
+        showAppDialog({
+          title: 'Unable to Unlock',
+          message:
+            res.error === 'Not enough coins'
+              ? `You need ${cost} coins to unlock ${title}.`
+              : res.error ?? 'Could not unlock upgrade.',
+        });
       }
     } finally {
       setBusyUpgradeId(null);
@@ -106,20 +121,30 @@ export const ShopScreen: React.FC = () => {
   };
 
   const handleBuyPack = async (pack: (typeof COIN_PACKS)[number]) => {
+    if (!isOnline) {
+      showAppDialog({
+        title: 'Offline',
+        message: 'Connect to the internet to purchase coin packs.',
+      });
+      return;
+    }
     if (busyPackId) return;
     setBusyPackId(pack.id);
     try {
       const res = await buyCoinPack(pack);
       if (res.cancelled) return;
       if (res.ok) {
-        Alert.alert(
-          'Purchase Complete!',
-          `+${res.coinsAwarded.toLocaleString()} coins added to your wallet${
-            res.mode === 'sandbox-simulator' ? ' (Sandbox Simulator)' : ''
-          }.`
-        );
+        showAppDialog({
+          title: 'Purchase Complete!',
+          message: `+${res.coinsAwarded.toLocaleString()} coins added to your wallet${
+            res.mode === 'sandbox-simulator' ? ' (Preview Simulator)' : ''
+          }.`,
+        });
       } else {
-        Alert.alert('Purchase Failed', res.error ?? 'Unable to complete purchase.');
+        showAppDialog({
+          title: 'Purchase Failed',
+          message: res.error ?? 'Unable to complete purchase.',
+        });
       }
     } finally {
       setBusyPackId(null);
@@ -128,45 +153,64 @@ export const ShopScreen: React.FC = () => {
 
   const handleRestore = async () => {
     const res = await restoreStorePurchases();
-    Alert.alert(res.ok ? 'Restore Complete' : 'Restore Failed', res.message);
+    showAppDialog({
+      title: res.ok ? 'Restore Complete' : 'Restore Failed',
+      message: res.message,
+    });
   };
 
   return (
     <View style={styles.wrapper}>
-      {/* Top Bar */}
       <View style={styles.topBar}>
-        <Pressable onPress={() => navigate('menu')} style={styles.iconBtn}>
+        <Pressable
+          onPress={() => navigate('menu')}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+          style={styles.iconBtn}
+        >
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>TileCraft Shop</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">
+            Coin Shop
+          </Text>
           <Text style={styles.syncTag}>
-            {syncedWithCloud ? '● Cloud & SQLite Synced' : '○ Local SQLite Wallet'}
+            {!isOnline
+              ? '○ Offline · Local Wallet'
+              : syncedWithCloud
+              ? '● Cloud & Local Synced'
+              : '● Local Device Wallet'}
           </Text>
         </View>
-        <CoinBadge coins={coins} showPlus={false} />
+        <CoinBadge coins={coins} loading={!economyHydrated} showPlus={false} />
       </View>
 
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Free Coins Section */}
         <Text style={styles.sectionTitle}>EARN FREE COINS</Text>
         <View style={styles.earnRow}>
           <Pressable
             onPress={() => setDailyModalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open Daily Streak rewards"
             style={({ pressed }) => [
               styles.earnCard,
               streak.canClaimToday && styles.earnCardHighlight,
               pressed && styles.pressed,
             ]}
           >
-            <Ionicons
-              name={streak.canClaimToday ? 'flame' : 'checkmark-circle'}
-              size={24}
-              color={streak.canClaimToday ? COLORS.gold : COLORS.success}
-            />
+            <View
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+            >
+              <Ionicons
+                name={streak.canClaimToday ? 'flame' : 'checkmark-circle'}
+                size={24}
+                color={streak.canClaimToday ? COLORS.gold : COLORS.success}
+              />
+            </View>
             <Text style={styles.earnTitle}>Daily Streak</Text>
             <Text style={styles.earnSub}>
               {streak.canClaimToday
@@ -178,27 +222,35 @@ export const ShopScreen: React.FC = () => {
           <Pressable
             onPress={handleWatchAd}
             disabled={watchingAd || adsRemaining === 0}
+            accessibilityRole="button"
+            accessibilityLabel={`Watch rewarded ad for ${REWARDED_AD_COINS} coins. ${adsRemaining} remaining today`}
             style={({ pressed }) => [
               styles.earnCard,
-              adsRemaining === 0 && styles.disabledCard,
+              (adsRemaining === 0 || !isOnline) && styles.disabledCard,
               pressed && styles.pressed,
             ]}
           >
             {watchingAd ? (
               <ActivityIndicator color="#38BDF8" size="small" />
             ) : (
-              <Ionicons name="play-circle" size={24} color="#38BDF8" />
+              <View
+                importantForAccessibility="no-hide-descendants"
+                accessibilityElementsHidden
+              >
+                <Ionicons name="play-circle" size={24} color="#38BDF8" />
+              </View>
             )}
             <Text style={styles.earnTitle}>
               {watchingAd ? 'Loading Ad...' : 'Watch Ad'}
             </Text>
             <Text style={styles.earnSub}>
-              +{REWARDED_AD_COINS} ¢ · {adsRemaining}/{MAX_REWARDED_ADS_PER_DAY} left
+              {!isOnline
+                ? 'Requires internet'
+                : `+${REWARDED_AD_COINS} ¢ · ${adsRemaining}/${MAX_REWARDED_ADS_PER_DAY} left`}
             </Text>
           </Pressable>
         </View>
 
-        {/* Unlocks & Upgrades */}
         <Text style={styles.sectionTitle}>UNLOCKS & UPGRADES</Text>
         <View style={styles.stack}>
           {SHOP_UPGRADES.map((upgrade) => {
@@ -217,6 +269,13 @@ export const ShopScreen: React.FC = () => {
                   onPress={() =>
                     handleBuyUpgrade(upgrade.id, upgrade.title, upgrade.coinCost)
                   }
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    owned
+                      ? `${upgrade.title}, owned`
+                      : `Unlock ${upgrade.title} for ${upgrade.coinCost} coins`
+                  }
+                  accessibilityState={{ disabled: owned || isBusy }}
                   style={[styles.upgradeBtn, owned && styles.upgradeBtnOwned]}
                 >
                   {isBusy ? (
@@ -237,10 +296,13 @@ export const ShopScreen: React.FC = () => {
           })}
         </View>
 
-        {/* Coin Packs (IAP) */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>COIN PACKS (IAP)</Text>
-          <Pressable onPress={handleRestore}>
+          <Text style={styles.sectionTitle}>COIN PACKS</Text>
+          <Pressable
+            onPress={handleRestore}
+            accessibilityRole="button"
+            accessibilityLabel="Restore previous purchases"
+          >
             <Text style={styles.restoreLink}>Restore Purchases</Text>
           </Pressable>
         </View>
@@ -253,9 +315,12 @@ export const ShopScreen: React.FC = () => {
                 key={pack.id}
                 disabled={isBusy}
                 onPress={() => handleBuyPack(pack)}
+                accessibilityRole="button"
+                accessibilityLabel={`Buy ${pack.title}, ${pack.coins + pack.bonusCoins} coins for ${pack.priceDisplay}`}
                 style={({ pressed }) => [
                   styles.packCard,
                   pack.badge && styles.packCardFeatured,
+                  !isOnline && styles.disabledCard,
                   pressed && styles.pressed,
                 ]}
               >
@@ -288,7 +353,6 @@ export const ShopScreen: React.FC = () => {
           })}
         </View>
 
-        {/* Recent Coin Ledger */}
         {transactions.length > 0 ? (
           <>
             <Text style={styles.sectionTitle}>RECENT WALLET ACTIVITY</Text>
@@ -296,10 +360,7 @@ export const ShopScreen: React.FC = () => {
               {transactions.slice(0, 8).map((tx, idx) => (
                 <View
                   key={tx.id}
-                  style={[
-                    styles.ledgerRow,
-                    idx > 0 && styles.ledgerRowBorder,
-                  ]}
+                  style={[styles.ledgerRow, idx > 0 && styles.ledgerRowBorder]}
                 >
                   <View>
                     <Text style={styles.ledgerLabel}>
@@ -425,6 +486,7 @@ const styles = StyleSheet.create({
     color: COLORS.gold,
     fontSize: 11,
     fontWeight: '700',
+    textAlign: 'center',
   },
   stack: {
     gap: 10,
