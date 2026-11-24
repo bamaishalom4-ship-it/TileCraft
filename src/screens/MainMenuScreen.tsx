@@ -14,6 +14,8 @@ import { usePuzzleStore } from '../store/usePuzzleStore';
 import { useAppStore } from '../store/useAppStore';
 import { pickImageFromGallery } from '../services/imageService';
 import { CoinBadge } from '../components/CoinBadge';
+import { DailyRewardModal } from '../components/DailyRewardModal';
+import { evaluateDailyStreak } from '../utils/economyUtils';
 import { COLORS, FRAME_THEMES } from '../theme/tokens';
 
 const GRID_OPTIONS: Array<{ size: GridSize; label: string; sub: string }> = [
@@ -38,6 +40,7 @@ const THEME_IDS: FrameThemeId[] = [
  */
 export const MainMenuScreen: React.FC = () => {
   const [picking, setPicking] = useState(false);
+  const [dailyModalOpen, setDailyModalOpen] = useState(false);
 
   const gridSize = usePuzzleStore((s) => s.gridSize);
   const frameTheme = usePuzzleStore((s) => s.frameTheme);
@@ -47,12 +50,16 @@ export const MainMenuScreen: React.FC = () => {
   const shuffle = usePuzzleStore((s) => s.shuffle);
 
   const coins = useAppStore((s) => s.coins);
+  const dailyStreak = useAppStore((s) => s.dailyStreak);
+  const lastDailyClaimDate = useAppStore((s) => s.lastDailyClaimDate);
   const unlockedGridSizes = useAppStore((s) => s.unlockedGridSizes);
   const unlockedAllFrames = useAppStore((s) => s.unlockedAllFrames);
   const customPuzzles = useAppStore((s) => s.customPuzzles);
   const navigate = useAppStore((s) => s.navigate);
   const openCropperWithAsset = useAppStore((s) => s.openCropperWithAsset);
   const setActivePuzzleMeta = useAppStore((s) => s.setActivePuzzleMeta);
+
+  const streakStatus = evaluateDailyStreak(lastDailyClaimDate, dailyStreak);
 
   const handleSelectGridSize = (size: GridSize) => {
     if (!unlockedGridSizes.includes(size)) {
@@ -157,6 +164,32 @@ export const MainMenuScreen: React.FC = () => {
 
         <CoinBadge coins={coins} onPress={() => navigate('shop')} />
       </View>
+
+      {/* Daily Streak Banner (glows when today's reward is ready) */}
+      {streakStatus.canClaimToday ? (
+        <Pressable
+          onPress={() => setDailyModalOpen(true)}
+          style={({ pressed }) => [
+            styles.dailyBanner,
+            pressed && styles.pressedScale,
+          ]}
+        >
+          <View style={styles.dailyBannerLeft}>
+            <Ionicons name="flame" size={20} color={COLORS.gold} />
+            <View>
+              <Text style={styles.dailyBannerTitle}>
+                Day {streakStatus.nextClaimDay} Daily Reward Ready!
+              </Text>
+              <Text style={styles.dailyBannerSub}>
+                Tap to claim +{streakStatus.nextRewardCoins} free coins
+              </Text>
+            </View>
+          </View>
+          <View style={styles.claimPill}>
+            <Text style={styles.claimPillText}>CLAIM</Text>
+          </View>
+        </Pressable>
+      ) : null}
 
       {/* Hero Play Card */}
       <View style={styles.heroCard}>
@@ -337,6 +370,11 @@ export const MainMenuScreen: React.FC = () => {
           </ScrollView>
         </View>
       )}
+
+      <DailyRewardModal
+        visible={dailyModalOpen}
+        onClose={() => setDailyModalOpen(false)}
+      />
     </ScrollView>
   );
 };
@@ -599,5 +637,42 @@ const styles = StyleSheet.create({
   pressedScale: {
     transform: [{ scale: 0.98 }],
     opacity: 0.92,
+  },
+  dailyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(245, 158, 11, 0.55)',
+  },
+  dailyBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dailyBannerTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dailyBannerSub: {
+    color: '#FDE68A',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  claimPill: {
+    backgroundColor: COLORS.gold,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9,
+  },
+  claimPillText: {
+    color: '#111827',
+    fontSize: 11,
+    fontWeight: '900',
   },
 });

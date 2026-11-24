@@ -47,7 +47,7 @@ export const GameScreen: React.FC = () => {
   const activePuzzleTitle = useAppStore((s) => s.activePuzzleTitle);
   const isCustomPuzzle = useAppStore((s) => s.isCustomPuzzle);
   const navigate = useAppStore((s) => s.navigate);
-  const spendCoins = useAppStore((s) => s.spendCoins);
+  const spendHintCoins = useAppStore((s) => s.spendHintCoins);
   const recordWin = useAppStore((s) => s.recordWin);
 
   // Transition to Win Screen once when solved
@@ -90,13 +90,14 @@ export const GameScreen: React.FC = () => {
     recordWin,
   ]);
 
-  const handleUseHint = () => {
+  const handleUseHint = async () => {
     if (status === 'solved') return;
 
-    if (!spendCoins(HINT_COIN_COST)) {
+    const paid = await spendHintCoins();
+    if (!paid) {
       Alert.alert(
         'Not Enough Coins',
-        `Hints cost ${HINT_COIN_COST} coins. Visit the Shop to claim your daily reward or grab a coin pack!`,
+        `Hints cost ${HINT_COIN_COST} coins. Visit the Shop to claim your daily reward, watch a rewarded ad, or grab a coin pack!`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Open Shop', onPress: () => navigate('shop') },

@@ -1,12 +1,22 @@
 # TileCraft
 
-Cross-platform tactile sliding tile puzzle game (3×3, 4×4, 5×5) built with **React Native (Expo) + TypeScript + Zustand** and **Supabase** for its User-Generated Content (UGC) puzzle marketplace and coin economy.
+Cross-platform tactile sliding tile puzzle game (`3×3`, `4×4`, `5×5`) with a moderated User-Generated Content (UGC) marketplace, synced Coin economy, AdMob rewarded ads, and In-App Purchases. Built with **React Native (Expo) + TypeScript + Zustand + SQLite** and **Supabase**.
 
-## Features (Phased Roadmap)
-- **Phase 1 — Core Engine & Tactile Grid:** Guaranteed-solvable puzzle generator using inversion & blank-row parity checks, single & multi-tile line pushes, A* / Weighted A* hint solver, live move counter & timer, retro molded plastic frame themes.
-- **Phase 2 — UI Screens & Custom Image Cropper:** Main Menu, Game Screen, Win Screen, Shop, and Gallery Image Picker with 1:1 square pan/zoom cropper.
-- **Phase 3 — Backend & UGC Marketplace:** Supabase Auth, Postgres + Storage schema, puzzle uploads, NSFW moderation workflow, community flagging, and browse/download marketplace.
-- **Phase 4 — Economy, Ads & IAP:** Local + synced Coin ledger, daily login rewards, AdMob rewarded video ads, coin packs (IAP), and coin-gated hints/grid unlocks.
+## Completed Phases
+
+- **Phase 1 — Core Engine & Tactile Grid:** Guaranteed-solvable board generator using inversion & blank-row parity checks, single & multi-tile line pushes, Manhattan + Linear Conflict A* hint solver, move counter, timer, and retro molded plastic frame themes.
+- **Phase 2 — UI Screens & 1:1 Image Cropper:** Main Menu, Game Screen (with target image peek & number overlay toggle), Win Screen (1–3 stars + coin rewards), Shop, and Gallery Image Picker with pan/zoom/rotate 1:1 square cropper & live tile cut lines.
+- **Phase 3 — Supabase Backend & UGC Marketplace:** Postgres schema (`profiles`, `puzzles`, `puzzle_downloads`, `puzzle_flags`), Storage bucket (`puzzle-images`), atomic coin purchase + 20% creator royalty RPC, automated NSFW moderation Edge Function (`moderate-puzzle`), and 3-flag community auto-quarantine trigger.
+- **Phase 4 — Economy, Ads & IAP:** Local SQLite wallet (`expo-sqlite` + AsyncStorage fallback) synced with Supabase `coin_transactions` ledger, 7-day escalating daily login streaks, Google AdMob rewarded video ads (with Expo Go preview fallback), and RevenueCat IAP coin packs + Restore Purchases.
+
+## Supabase Setup
+
+1. Open your Supabase project's **SQL Editor** and run in order:
+   - `supabase/migrations/001_tilecraft_schema.sql`
+   - `supabase/migrations/002_tilecraft_economy.sql`
+2. Enable **Anonymous Sign-Ins** under **Authentication → Providers**.
+3. Copy `.env.example` to `.env` and populate `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+4. *(Optional)* Deploy `supabase/functions/moderate-puzzle/index.ts` and configure `OPENAI_API_KEY` or `SIGHTENGINE_USER`/`SIGHTENGINE_SECRET` (or `MODERATION_DEV_AUTO_APPROVE=true` during development).
 
 ## Running Locally
 
@@ -15,3 +25,5 @@ npm.cmd install
 npm.cmd run test:engine
 npx.cmd expo start
 ```
+
+> Note: AdMob (`react-native-google-mobile-ads`) and RevenueCat (`react-native-purchases`) run in safe preview/sandbox mode inside Expo Go and Web, and switch automatically to native SDKs when built with `eas build` / `npx expo run:android` / `npx expo run:ios`.

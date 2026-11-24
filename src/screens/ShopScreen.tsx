@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -13,59 +14,120 @@ import {
   SHOP_UPGRADES,
   useAppStore,
 } from '../store/useAppStore';
+import {
+  evaluateDailyStreak,
+  formatTxLabel,
+  getUtcDateKey,
+  MAX_REWARDED_ADS_PER_DAY,
+  REWARDED_AD_COINS,
+} from '../utils/economyUtils';
+import { restoreStorePurchases } from '../services/iapService';
 import { CoinBadge } from '../components/CoinBadge';
+import { DailyRewardModal } from '../components/DailyRewardModal';
 import { COLORS } from '../theme/tokens';
 
 /**
- * TileCraft Shop Screen (Phase 2 UI + local unlock preview;
- * Phase 4 connects real AdMob rewarded video ads, RevenueCat IAP, and Supabase ledger).
+ * TileCraft Shop & Wallet Screen (Phase 4):
+ * - 7-Day Daily Login Streak modal + claim status
+ * - AdMob Rewarded Video Ads (+35 coins, 10/day cap)
+ * - Synced Shop Upgrades (5×5 Master Grid, Retro Arcade Frames)
+ * - Real-money IAP Coin Packs (RevenueCat / StoreKit / Play Billing + Sandbox fallback)
+ * - Restore Purchases & Live Coin Transaction Ledger (SQLite + Supabase synced)
  */
 export const ShopScreen: React.FC = () => {
+  const [dailyModalOpen, setDailyModalOpen] = useState(false);
+  const [watchingAd, setWatchingAd] = useState(false);
+  const [busyPackId, setBusyPackId] = useState<string | null>(null);
+  const [busyUpgradeId, setBusyUpgradeId] = useState<string | null>(null);
+
   const coins = useAppStore((s) => s.coins);
-  const dailyClaimedToday = useAppStore((s) => s.dailyClaimedToday);
+  const syncedWithCloud = useAppStore((s) => s.syncedWithCloud);
+  const dailyStreak = useAppStore((s) => s.dailyStreak);
+  const lastDailyClaimDate = useAppStore((s) => s.lastDailyClaimDate);
+  const rewardedAdsWatchedToday = useAppStore((s) => s.rewardedAdsWatchedToday);
+  const rewardedAdsDate = useAppStore((s) => s.rewardedAdsDate);
   const unlockedGridSizes = useAppStore((s) => s.unlockedGridSizes);
   const unlockedAllFrames = useAppStore((s) => s.unlockedAllFrames);
+  const transactions = useAppStore((s) => s.transactions);
+
   const navigate = useAppStore((s) => s.navigate);
-  const claimDailyRewardPreview = useAppStore((s) => s.claimDailyRewardPreview);
-  const grantCoins = useAppStore((s) => s.grantCoins);
-  const purchaseUpgrade = useAppStore((s) => s.purchaseUpgrade);
+  const watchRewardedAd = useAppStore((s) => s.watchRewardedAd);
+  const buyUpgrade = useAppStore((s) => s.buyUpgrade);
+  const buyCoinPack = useAppStore((s) => s.buyCoinPack);
 
-  const handleDailyReward = () => {
-    const claimed = claimDailyRewardPreview();
-    if (claimed) {
-      Alert.alert('Daily Reward Claimed!', '+50 coins added to your wallet.');
+  const streak = evaluateDailyStreak(lastDailyClaimDate, dailyStreak);
+  const todayKey = getUtcDateKey();
+  const adsToday = rewardedAdsDate === todayKey ? rewardedAdsWatchedToday : 0;
+  const adsRemaining = Math.max(0, MAX_REWARDED_ADS_PER_DAY - adsToday);
+
+  const handleWatchAd = async () => {
+    if (watchingAd) return;
+    setWatchingAd(true);
+    try {
+      const res = await watchRewardedAd();
+      if (res.ok) {
+        Alert.alert(
+          'Reward Earned!',
+          `+${res.coinsAwarded} coins credited to your wallet${
+            res.adMode === 'expo-preview' ? ' (Expo AdMob Preview Mode)' : ''
+          }.`
+        );
+      } else {
+        Alert.alert('Ad Unavailable', res.error ?? 'Could not complete rewarded ad.');
+      }
+    } finally {
+      setWatchingAd(false);
     }
   };
 
-  const handleRewardedAdPreview = () => {
-    Alert.alert(
-      'Rewarded Ad (Preview)',
-      'Phase 4 integrates Google AdMob rewarded video ads. Granting +30 preview coins now!',
-      [{ text: 'Collect +30 ¢', onPress: () => grantCoins(30) }]
-    );
-  };
-
-  const handleBuyPack = (title: string, totalCoins: number, price: string) => {
-    Alert.alert(
-      `Purchase ${title} (${price})`,
-      `Phase 4 hooks this SKU to App Store / Google Play IAP. Add ${totalCoins.toLocaleString()} preview coins now?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Simulate IAP', onPress: () => grantCoins(totalCoins) },
-      ]
-    );
-  };
-
-  const handleBuyUpgrade = (id: 'unlock_5x5' | 'frame_pack', title: string, cost: number) => {
-    const ok = purchaseUpgrade(id);
-    if (ok) {
-      Alert.alert('Unlocked!', `${title} is now active across TileCraft.`);
-    } else {
-      Alert.alert(
-        'Not Enough Coins',
-        `You need ${cost} coins to unlock ${title}. Claim your daily reward or grab a coin pack!`
-      );
+  const handleBuyUpgrade = async (
+    id: 'unlock_5x5' | 'frame_pack',
+    title: string,
+    cost: number
+  ) => {
+    if (busyUpgradeId) return;
+    setBusyUpgradeId(id);
+    try {
+      const res = await buyUpgrade(id);
+      if (res.ok) {
+        Alert.alert('Unlocked!', `${title} is now active and synced to your account.`);
+      } else {
+        Alert.alert(
+          'Unable to Unlock',
+          res.error === 'Not enough coins'
+            ? `You need ${cost} coins to unlock ${title}.`
+            : res.error ?? 'Could not unlock upgrade.'
+        );
+      }
+    } finally {
+      setBusyUpgradeId(null);
     }
+  };
+
+  const handleBuyPack = async (pack: (typeof COIN_PACKS)[number]) => {
+    if (busyPackId) return;
+    setBusyPackId(pack.id);
+    try {
+      const res = await buyCoinPack(pack);
+      if (res.cancelled) return;
+      if (res.ok) {
+        Alert.alert(
+          'Purchase Complete!',
+          `+${res.coinsAwarded.toLocaleString()} coins added to your wallet${
+            res.mode === 'sandbox-simulator' ? ' (Sandbox Simulator)' : ''
+          }.`
+        );
+      } else {
+        Alert.alert('Purchase Failed', res.error ?? 'Unable to complete purchase.');
+      }
+    } finally {
+      setBusyPackId(null);
+    }
+  };
+
+  const handleRestore = async () => {
+    const res = await restoreStorePurchases();
+    Alert.alert(res.ok ? 'Restore Complete' : 'Restore Failed', res.message);
   };
 
   return (
@@ -75,7 +137,12 @@ export const ShopScreen: React.FC = () => {
         <Pressable onPress={() => navigate('menu')} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
         </Pressable>
-        <Text style={styles.headerTitle}>TileCraft Shop</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>TileCraft Shop</Text>
+          <Text style={styles.syncTag}>
+            {syncedWithCloud ? '● Cloud & SQLite Synced' : '○ Local SQLite Wallet'}
+          </Text>
+        </View>
         <CoinBadge coins={coins} showPlus={false} />
       </View>
 
@@ -87,32 +154,46 @@ export const ShopScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>EARN FREE COINS</Text>
         <View style={styles.earnRow}>
           <Pressable
-            onPress={handleDailyReward}
-            disabled={dailyClaimedToday}
+            onPress={() => setDailyModalOpen(true)}
             style={({ pressed }) => [
               styles.earnCard,
-              dailyClaimedToday && styles.earnCardClaimed,
+              streak.canClaimToday && styles.earnCardHighlight,
               pressed && styles.pressed,
             ]}
           >
             <Ionicons
-              name={dailyClaimedToday ? 'checkmark-circle' : 'calendar'}
+              name={streak.canClaimToday ? 'flame' : 'checkmark-circle'}
               size={24}
-              color={dailyClaimedToday ? COLORS.success : COLORS.gold}
+              color={streak.canClaimToday ? COLORS.gold : COLORS.success}
             />
-            <Text style={styles.earnTitle}>Daily Login</Text>
+            <Text style={styles.earnTitle}>Daily Streak</Text>
             <Text style={styles.earnSub}>
-              {dailyClaimedToday ? 'Claimed Today' : '+50 Coins'}
+              {streak.canClaimToday
+                ? `Day ${streak.nextClaimDay}: +${streak.nextRewardCoins} ¢`
+                : `Day ${streak.currentStreak} Claimed`}
             </Text>
           </Pressable>
 
           <Pressable
-            onPress={handleRewardedAdPreview}
-            style={({ pressed }) => [styles.earnCard, pressed && styles.pressed]}
+            onPress={handleWatchAd}
+            disabled={watchingAd || adsRemaining === 0}
+            style={({ pressed }) => [
+              styles.earnCard,
+              adsRemaining === 0 && styles.disabledCard,
+              pressed && styles.pressed,
+            ]}
           >
-            <Ionicons name="play-circle" size={24} color="#38BDF8" />
-            <Text style={styles.earnTitle}>Watch Ad</Text>
-            <Text style={styles.earnSub}>+30 Coins</Text>
+            {watchingAd ? (
+              <ActivityIndicator color="#38BDF8" size="small" />
+            ) : (
+              <Ionicons name="play-circle" size={24} color="#38BDF8" />
+            )}
+            <Text style={styles.earnTitle}>
+              {watchingAd ? 'Loading Ad...' : 'Watch Ad'}
+            </Text>
+            <Text style={styles.earnSub}>
+              +{REWARDED_AD_COINS} ¢ · {adsRemaining}/{MAX_REWARDED_ADS_PER_DAY} left
+            </Text>
           </Pressable>
         </View>
 
@@ -123,6 +204,7 @@ export const ShopScreen: React.FC = () => {
             const owned =
               (upgrade.id === 'unlock_5x5' && unlockedGridSizes.includes(5)) ||
               (upgrade.id === 'frame_pack' && unlockedAllFrames);
+            const isBusy = busyUpgradeId === upgrade.id;
             return (
               <View key={upgrade.id} style={styles.upgradeCard}>
                 <View style={styles.upgradeText}>
@@ -130,23 +212,24 @@ export const ShopScreen: React.FC = () => {
                   <Text style={styles.upgradeDesc}>{upgrade.description}</Text>
                 </View>
                 <Pressable
-                  disabled={owned}
+                  disabled={owned || isBusy}
                   onPress={() =>
                     handleBuyUpgrade(upgrade.id, upgrade.title, upgrade.coinCost)
                   }
-                  style={[
-                    styles.upgradeBtn,
-                    owned && styles.upgradeBtnOwned,
-                  ]}
+                  style={[styles.upgradeBtn, owned && styles.upgradeBtnOwned]}
                 >
-                  <Text
-                    style={[
-                      styles.upgradeBtnText,
-                      owned && styles.upgradeBtnTextOwned,
-                    ]}
-                  >
-                    {owned ? 'Owned' : `${upgrade.coinCost} ¢`}
-                  </Text>
+                  {isBusy ? (
+                    <ActivityIndicator color="#111827" size="small" />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.upgradeBtnText,
+                        owned && styles.upgradeBtnTextOwned,
+                      ]}
+                    >
+                      {owned ? 'Owned' : `${upgrade.coinCost} ¢`}
+                    </Text>
+                  )}
                 </Pressable>
               </View>
             );
@@ -154,16 +237,21 @@ export const ShopScreen: React.FC = () => {
         </View>
 
         {/* Coin Packs (IAP) */}
-        <Text style={styles.sectionTitle}>COIN PACKS</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>COIN PACKS (IAP)</Text>
+          <Pressable onPress={handleRestore}>
+            <Text style={styles.restoreLink}>Restore Purchases</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.stack}>
           {COIN_PACKS.map((pack) => {
-            const total = pack.coins + pack.bonusCoins;
+            const isBusy = busyPackId === pack.id;
             return (
               <Pressable
                 key={pack.id}
-                onPress={() =>
-                  handleBuyPack(pack.title, total, pack.priceDisplay)
-                }
+                disabled={isBusy}
+                onPress={() => handleBuyPack(pack)}
                 style={({ pressed }) => [
                   styles.packCard,
                   pack.badge && styles.packCardFeatured,
@@ -188,13 +276,58 @@ export const ShopScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.pricePill}>
-                  <Text style={styles.priceText}>{pack.priceDisplay}</Text>
+                  {isBusy ? (
+                    <ActivityIndicator color={COLORS.gold} size="small" />
+                  ) : (
+                    <Text style={styles.priceText}>{pack.priceDisplay}</Text>
+                  )}
                 </View>
               </Pressable>
             );
           })}
         </View>
+
+        {/* Recent Coin Ledger */}
+        {transactions.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>RECENT WALLET ACTIVITY</Text>
+            <View style={styles.ledgerCard}>
+              {transactions.slice(0, 8).map((tx, idx) => (
+                <View
+                  key={tx.id}
+                  style={[
+                    styles.ledgerRow,
+                    idx > 0 && styles.ledgerRowBorder,
+                  ]}
+                >
+                  <View>
+                    <Text style={styles.ledgerLabel}>
+                      {formatTxLabel(tx.txType)}
+                    </Text>
+                    <Text style={styles.ledgerMeta}>
+                      Bal: {tx.balanceAfter.toLocaleString()} ¢ ·{' '}
+                      {tx.synced ? 'Synced' : 'Local'}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.ledgerDelta,
+                      tx.delta > 0 ? styles.deltaPositive : styles.deltaNegative,
+                    ]}
+                  >
+                    {tx.delta > 0 ? `+${tx.delta}` : tx.delta} ¢
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
       </ScrollView>
+
+      <DailyRewardModal
+        visible={dailyModalOpen}
+        onClose={() => setDailyModalOpen(false)}
+      />
     </View>
   );
 };
@@ -223,15 +356,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerCenter: {
+    alignItems: 'center',
+  },
   headerTitle: {
     color: COLORS.textPrimary,
     fontSize: 18,
     fontWeight: '900',
   },
+  syncTag: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
   content: {
     paddingHorizontal: 18,
-    paddingBottom: 32,
+    paddingBottom: 36,
     gap: 14,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
   },
   sectionTitle: {
     color: COLORS.textMuted,
@@ -239,6 +386,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 1.1,
     marginTop: 6,
+  },
+  restoreLink: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '700',
   },
   earnRow: {
     flexDirection: 'row',
@@ -254,9 +406,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  earnCardClaimed: {
-    opacity: 0.65,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
+  earnCardHighlight: {
+    borderColor: 'rgba(245, 158, 11, 0.55)',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+  },
+  disabledCard: {
+    opacity: 0.55,
   },
   earnTitle: {
     color: COLORS.textPrimary,
@@ -265,7 +420,7 @@ const styles = StyleSheet.create({
   },
   earnSub: {
     color: COLORS.gold,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   stack: {
@@ -296,10 +451,12 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   upgradeBtn: {
+    minWidth: 74,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: COLORS.gold,
+    alignItems: 'center',
   },
   upgradeBtnOwned: {
     backgroundColor: 'rgba(16, 185, 129, 0.16)',
@@ -357,17 +514,57 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pricePill: {
+    minWidth: 68,
     backgroundColor: COLORS.surfaceElevated,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderWidth: 1,
     borderColor: COLORS.border,
+    alignItems: 'center',
   },
   priceText: {
     color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: '900',
+  },
+  ledgerCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  ledgerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 11,
+  },
+  ledgerRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  ledgerLabel: {
+    color: COLORS.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  ledgerMeta: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  ledgerDelta: {
+    fontSize: 14,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+  deltaPositive: {
+    color: COLORS.success,
+  },
+  deltaNegative: {
+    color: '#F87171',
   },
   pressed: {
     transform: [{ scale: 0.98 }],

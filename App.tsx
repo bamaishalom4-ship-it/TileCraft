@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +13,12 @@ import { COLORS } from './src/theme/tokens';
 
 function TileCraftRoot() {
   const currentScreen = useAppStore((s) => s.currentScreen);
+  const hydrateEconomy = useAppStore((s) => s.hydrateEconomy);
+
+  // Hydrate SQLite local wallet immediately, then sync with Supabase cloud profile
+  useEffect(() => {
+    hydrateEconomy();
+  }, [hydrateEconomy]);
 
   const renderScreen = () => {
     switch (currentScreen) {
