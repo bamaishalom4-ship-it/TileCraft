@@ -1,23 +1,39 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { GameHudBottom, GameHudTop } from './src/components/GameHud';
-import { PuzzleBoard } from './src/components/PuzzleBoard';
-import { usePuzzleTimer } from './src/hooks/usePuzzleTimer';
+import { useAppStore } from './src/store/useAppStore';
+import { MainMenuScreen } from './src/screens/MainMenuScreen';
+import { GameScreen } from './src/screens/GameScreen';
+import { WinScreen } from './src/screens/WinScreen';
+import { ShopScreen } from './src/screens/ShopScreen';
+import { ImageCropperScreen } from './src/screens/ImageCropperScreen';
 import { COLORS } from './src/theme/tokens';
 
-function GameScreenPhase1() {
-  usePuzzleTimer();
+function TileCraftRoot() {
+  const currentScreen = useAppStore((s) => s.currentScreen);
+
+  const renderScreen = () => {
+    switch (currentScreen) {
+      case 'menu':
+        return <MainMenuScreen />;
+      case 'game':
+        return <GameScreen />;
+      case 'win':
+        return <WinScreen />;
+      case 'shop':
+        return <ShopScreen />;
+      case 'cropper':
+        return <ImageCropperScreen />;
+      default:
+        return <MainMenuScreen />;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
-      <View style={styles.screen}>
-        <GameHudTop />
-        <PuzzleBoard />
-        <GameHudBottom />
-      </View>
+      {renderScreen()}
     </SafeAreaView>
   );
 }
@@ -25,7 +41,7 @@ function GameScreenPhase1() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <GameScreenPhase1 />
+      <TileCraftRoot />
     </SafeAreaProvider>
   );
 }
@@ -34,12 +50,5 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  screen: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
   },
 });

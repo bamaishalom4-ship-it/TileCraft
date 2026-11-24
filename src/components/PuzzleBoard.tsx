@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo } from 'react';
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { BLANK_TILE } from '../types/puzzle';
 import { usePuzzleStore } from '../store/usePuzzleStore';
-import { COLORS, FRAME_THEMES } from '../theme/tokens';
+import { FRAME_THEMES } from '../theme/tokens';
 import { PuzzleTile } from './PuzzleTile';
 
 const FRAME_PADDING = 14;
@@ -118,16 +118,6 @@ export const PuzzleBoard: React.FC = () => {
           </View>
         </View>
       </View>
-
-      {/* Solved Banner (Phase 2 replaces this with a dedicated Win Screen + Coin Reward) */}
-      {status === 'solved' && (
-        <View style={styles.solvedBanner}>
-          <Text style={styles.solvedTitle}>Puzzle Solved!</Text>
-          <Text style={styles.solvedSubtitle}>
-            Tap Shuffle to deal a fresh guaranteed-solvable board.
-          </Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -154,25 +144,5 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  solvedBanner: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    borderWidth: 1,
-    borderColor: COLORS.success,
-    alignItems: 'center',
-  },
-  solvedTitle: {
-    color: '#6EE7B7',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  solvedSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
   },
 });

@@ -18,6 +18,14 @@
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TileCraft needs access to your photos so you can craft custom sliding puzzles."
+        }
+      ]
+    ]
   }
 }
