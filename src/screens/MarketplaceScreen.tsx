@@ -31,6 +31,7 @@ import { useAppStore } from '../store/useAppStore';
 import { usePuzzleStore } from '../store/usePuzzleStore';
 import { CoinBadge } from '../components/CoinBadge';
 import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
+import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { pickImageFromGallery } from '../services/imageService';
 import { COLORS } from '../theme/tokens';
 
@@ -330,6 +331,7 @@ export const MarketplaceScreen: React.FC = () => {
               </Text>
             </View>
           }
+          ListFooterComponent={<MadeByKuboFooter variant="compact" />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => setInspectedPuzzle(item)}

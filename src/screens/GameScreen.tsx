@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { PuzzleBoard } from '../components/PuzzleBoard';
 import { CoinBadge } from '../components/CoinBadge';
+import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { usePuzzleStore } from '../store/usePuzzleStore';
 import { HINT_COIN_COST, useAppStore } from '../store/useAppStore';
 import { countCorrectTiles } from '../engine/puzzleEngine';
@@ -212,6 +213,8 @@ export const GameScreen: React.FC = () => {
             <Text style={styles.shuffleBtnText}>Shuffle</Text>
           </Pressable>
         </View>
+
+        <MadeByKuboFooter variant="compact" />
       </View>
 
       {/* Reference Target Image Peek Modal */}

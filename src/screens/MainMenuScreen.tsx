@@ -16,6 +16,7 @@ import { pickImageFromGallery } from '../services/imageService';
 import { CoinBadge } from '../components/CoinBadge';
 import { DailyRewardModal } from '../components/DailyRewardModal';
 import { InstallPwaBanner } from '../components/InstallPwaBanner';
+import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { evaluateDailyStreak } from '../utils/economyUtils';
 import { COLORS, FRAME_THEMES } from '../theme/tokens';
 
@@ -374,6 +375,8 @@ export const MainMenuScreen: React.FC = () => {
           </ScrollView>
         </View>
       )}
+
+      <MadeByKuboFooter variant="full" />
 
       <DailyRewardModal
         visible={dailyModalOpen}

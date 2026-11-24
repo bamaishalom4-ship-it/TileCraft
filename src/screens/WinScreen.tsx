@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
 import { usePuzzleStore } from '../store/usePuzzleStore';
 import { PublishPuzzleModal } from '../components/PublishPuzzleModal';
+import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { formatElapsedTime } from '../hooks/usePuzzleTimer';
 import { COLORS } from '../theme/tokens';
 
@@ -129,6 +130,8 @@ export const WinScreen: React.FC = () => {
           <Text style={styles.secondaryBtnText}>Back to Main Menu</Text>
         </Pressable>
       </View>
+
+      <MadeByKuboFooter variant="compact" />
 
       <PublishPuzzleModal
         visible={publishOpen}

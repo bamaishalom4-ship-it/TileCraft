@@ -24,6 +24,7 @@ import {
 import { restoreStorePurchases } from '../services/iapService';
 import { CoinBadge } from '../components/CoinBadge';
 import { DailyRewardModal } from '../components/DailyRewardModal';
+import { MadeByKuboFooter } from '../components/MadeByKuboFooter';
 import { COLORS } from '../theme/tokens';
 
 /**
@@ -322,6 +323,8 @@ export const ShopScreen: React.FC = () => {
             </View>
           </>
         ) : null}
+
+        <MadeByKuboFooter variant="full" />
       </ScrollView>
 
       <DailyRewardModal

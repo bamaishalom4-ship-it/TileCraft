@@ -37,6 +37,9 @@ if (!html.includes('rel="manifest"')) {
 if (!html.includes('name="theme-color"')) {
   tags.push('  <meta name="theme-color" content="#0F131D" />');
 }
+if (!html.includes('name="author"')) {
+  tags.push('  <meta name="author" content="MadeByKubo" />');
+}
 if (!html.includes('name="mobile-web-app-capable"')) {
   tags.push('  <meta name="mobile-web-app-capable" content="yes" />');
   tags.push('  <meta name="apple-mobile-web-app-capable" content="yes" />');
